@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -151,9 +151,7 @@ namespace NLog.Config
         /// <returns>Boolean attribute value or default.</returns>
         public bool GetOptionalBooleanAttribute(string attributeName, bool defaultValue)
         {
-            string value;
-
-            if (!AttributeValues.TryGetValue(attributeName, out value))
+            if (!AttributeValues.TryGetValue(attributeName, out var value))
             {
                 return defaultValue;
             }

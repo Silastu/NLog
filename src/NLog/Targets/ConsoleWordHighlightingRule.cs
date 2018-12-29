@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -31,7 +31,7 @@
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-#if !SILVERLIGHT
+#if !SILVERLIGHT && !NETSTANDARD1_3
 
 namespace NLog.Targets
 {
@@ -80,6 +80,7 @@ namespace NLog.Targets
         /// <summary>
         /// Compile the <see cref="Regex"/>? This can improve the performance, but at the costs of more memory usage. If <c>false</c>, the Regex Cache is used.
         /// </summary>
+        /// <docgen category='Rule Matching Options' order='10' />
         [DefaultValue(false)]
         public bool CompileRegex { get; set; }
 

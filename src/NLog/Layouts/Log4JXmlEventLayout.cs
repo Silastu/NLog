@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -33,6 +33,8 @@
 
 namespace NLog.Layouts
 {
+    using System.Text;
+    using NLog.Config;
     using NLog.LayoutRenderers;
 
     /// <summary>
@@ -42,6 +44,9 @@ namespace NLog.Layouts
     /// This layout is not meant to be used explicitly. Instead you can use ${log4jxmlevent} layout renderer.
     /// </remarks>
     [Layout("Log4JXmlEventLayout")]
+    [ThreadAgnostic]
+    [ThreadSafe]
+    [AppDomainFixedOutput]
     public class Log4JXmlEventLayout : Layout, IIncludeContext
     {
         /// <summary>
@@ -109,6 +114,11 @@ namespace NLog.Layouts
         }
 #endif
 
+        internal override void PrecalculateBuilder(LogEventInfo logEvent, StringBuilder target)
+        {
+            PrecalculateBuilderInternal(logEvent, target);
+        }
+
         /// <summary>
         /// Renders the layout for the specified logging event by invoking layout renderers.
         /// </summary>
@@ -123,8 +133,8 @@ namespace NLog.Layouts
         /// Renders the layout for the specified logging event by invoking layout renderers.
         /// </summary>
         /// <param name="logEvent">The logging event.</param>
-        /// <param name="target"><see cref="System.Text.StringBuilder"/> for the result</param>
-        protected override void RenderFormattedMessage(LogEventInfo logEvent, System.Text.StringBuilder target)
+        /// <param name="target"><see cref="StringBuilder"/> for the result</param>
+        protected override void RenderFormattedMessage(LogEventInfo logEvent, StringBuilder target)
         {
             Renderer.RenderAppendBuilder(logEvent, target);
         }

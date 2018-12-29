@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -31,21 +31,22 @@
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-#if !NETSTANDARD1_5
+#if !NETSTANDARD1_0
 
 namespace NLog.LayoutRenderers
 {
     using System;
     using System.IO;
     using System.Text;
-    using Config;
-    using Internal;
+    using NLog.Config;
+    using NLog.Internal;
 
     /// <summary>
     /// System special folder path (includes My Documents, My Music, Program Files, Desktop, and more).
     /// </summary>
     [LayoutRenderer("specialfolder")]
     [AppDomainFixedOutput]
+    [ThreadSafe]
     public class SpecialFolderLayoutRenderer : LayoutRenderer
     {
         /// <summary>
@@ -88,9 +89,7 @@ namespace NLog.LayoutRenderers
         protected override void Append(StringBuilder builder, LogEventInfo logEvent)
         {
             string basePath = Environment.GetFolderPath(Folder);
-
             var path = PathHelpers.CombinePaths(basePath, Dir, File);
-   
             builder.Append(path);
         }
     }

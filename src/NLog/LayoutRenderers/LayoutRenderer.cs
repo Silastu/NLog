@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -219,12 +219,7 @@ namespace NLog.LayoutRenderers
         /// <returns></returns>
         protected IFormatProvider GetFormatProvider(LogEventInfo logEvent, IFormatProvider layoutCulture = null)
         {
-            var culture = logEvent.FormatProvider;
-
-            if (culture == null)
-            {
-                culture = layoutCulture;
-            }
+            var culture = logEvent.FormatProvider ?? layoutCulture;
 
             if (culture == null && LoggingConfiguration != null)
             {
@@ -244,12 +239,7 @@ namespace NLog.LayoutRenderers
         /// </remarks>
         protected CultureInfo GetCulture(LogEventInfo logEvent, CultureInfo layoutCulture = null)
         {
-            var culture = logEvent.FormatProvider as CultureInfo;
-
-            if (culture == null)
-            {
-                culture = layoutCulture;
-            }
+            var culture = logEvent.FormatProvider as CultureInfo ?? layoutCulture;
 
             if (culture == null && LoggingConfiguration != null)
             {

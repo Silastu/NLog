@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -30,6 +30,8 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF 
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
+
+using NLog.UnitTests.Common;
 
 namespace NLog.UnitTests
 {
@@ -1751,6 +1753,146 @@ namespace NLog.UnitTests
             Assert.Throws<InvalidOperationException>(() => logger.Log(new LogEventInfo()));
         }
 
+
+        [Fact]
+        public void SingleTargetMessageFormatOptimizationTest()
+        {
+            LogManager.Configuration = CreateConfigurationFromString(@"
+                <nlog>
+                    <targets>
+                        <target name='target1' type='Debug' layout='${logger}|${message}' />
+                        <target name='target2' type='Debug' layout='${logger}|${message}' />
+                    </targets>
+                    <rules>
+                        <logger name='SingleTarget' writeTo='target1' />
+                        <logger name='DualTarget' writeTo='target1,target2' />
+                    </rules>
+                </nlog>");
+
+            var singleLogger = LogManager.GetLogger("SingleTarget");
+            var dualLogger = LogManager.GetLogger("DualTarget");
+
+            ConfigurationItemFactory.Default.ParseMessageTemplates = null;
+
+            singleLogger.Debug("Hello");
+            AssertDebugLastMessage("target1", "SingleTarget|Hello");
+            singleLogger.Debug("Hello {0}", "World");
+            AssertDebugLastMessage("target1", "SingleTarget|Hello World");
+
+            dualLogger.Debug("Hello");
+            AssertDebugLastMessage("target1", "DualTarget|Hello");
+            AssertDebugLastMessage("target2", "DualTarget|Hello");
+            dualLogger.Debug("Hello {0}", "World");
+            AssertDebugLastMessage("target1", "DualTarget|Hello World");
+            AssertDebugLastMessage("target2", "DualTarget|Hello World");
+
+            ConfigurationItemFactory.Default.ParseMessageTemplates = true;
+
+            singleLogger.Debug("Hello");
+            AssertDebugLastMessage("target1", "SingleTarget|Hello");
+            singleLogger.Debug("Hello {0}", "World");
+            AssertDebugLastMessage("target1", "SingleTarget|Hello World");
+
+            dualLogger.Debug("Hello");
+            AssertDebugLastMessage("target1", "DualTarget|Hello");
+            AssertDebugLastMessage("target2", "DualTarget|Hello");
+            dualLogger.Debug("Hello {0}", "World");
+            AssertDebugLastMessage("target1", "DualTarget|Hello World");
+            AssertDebugLastMessage("target2", "DualTarget|Hello World");
+
+            ConfigurationItemFactory.Default.ParseMessageTemplates = false;
+
+            singleLogger.Debug("Hello");
+            AssertDebugLastMessage("target1", "SingleTarget|Hello");
+            singleLogger.Debug("Hello {0}", "World");
+            AssertDebugLastMessage("target1", "SingleTarget|Hello World");
+
+            dualLogger.Debug("Hello");
+            AssertDebugLastMessage("target1", "DualTarget|Hello");
+            AssertDebugLastMessage("target2", "DualTarget|Hello");
+            dualLogger.Debug("Hello {0}", "World");
+            AssertDebugLastMessage("target1", "DualTarget|Hello World");
+            AssertDebugLastMessage("target2", "DualTarget|Hello World");
+        }
+
+        [Theory]
+        [InlineData(null, "OrderId", "@Client")]
+        [InlineData(true, "OrderId", "@Client")]
+        [InlineData(null, "0", "@Client", Skip = "Not supported for performance reasons")]
+        [InlineData(true, "0", "@Client")]
+        [InlineData(null, "$0", "@Client")]
+        [InlineData(true, "$0", "@Client")]
+        [InlineData(null, "@0", "@Client")]
+        [InlineData(true, "@0", "@Client")]
+        [InlineData(null, "1", "@Client", Skip = "Not supported for performance reasons")]
+        [InlineData(true, "1", "@Client")]
+        [InlineData(null, "@Client", "1")]
+        [InlineData(true, "@Client", "1")]
+        [InlineData(true, "0", "1")]
+        [InlineData(false, "0", "1")]
+        [InlineData(true, "OrderId", "Client")] //succeeeds, but gives JSON like (no quoted key, missing quotes arround string, =, other spacing)
+        public void MixedStructuredEventsConfigTest(bool? parseMessageTemplates, string param1, string param2)
+        {
+            LogManager.Configuration = CreateSimpleDebugConfig(parseMessageTemplates);
+            ILogger logger = LogManager.GetLogger("A");
+            logger.Debug("Process order {" + param1 + "} for {" + param2 + "}", 13424, new { ClientId = 3001, ClientName = "John Doe" });
+
+
+
+            string param1Value;
+
+            if (param1.StartsWith("$"))
+            {
+                param1Value = "\"13424\"";
+            }
+            else
+            {
+                param1Value = "13424";
+            }
+
+            string param2Value;
+            if (param2.StartsWith("@"))
+            {
+                param2Value = "{\"ClientId\":3001, \"ClientName\":\"John Doe\"}";
+            }
+            else
+            {
+                param2Value = "{ ClientId = 3001, ClientName = John Doe }";
+            }
+
+            AssertDebugLastMessage("debug", $"Process order {param1Value} for {param2Value}");
+        }
+
+        [Fact]
+        public void StructuredParametersShouldHandleDeferredCheck()
+        {
+            System.Text.StringBuilder sb = new System.Text.StringBuilder("Test");
+            LogEventInfo logEventInfo = new LogEventInfo(LogLevel.Info, "Logger", null, "{0}", new object[] { sb });
+            sb.Clear();
+            string formattedMessage = logEventInfo.FormattedMessage;
+            Assert.Equal("Test", formattedMessage);
+            var properties = logEventInfo.Properties;
+            Assert.Empty(properties);
+            string formattedMessage2 = logEventInfo.FormattedMessage;
+            Assert.Equal("Test", formattedMessage2);
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(null)]
+        public void TooManyStructuredParametersShouldKeepBeInParamList(bool? parseMessageTemplates)
+        {
+            LogManager.Configuration = CreateSimpleDebugConfig(parseMessageTemplates, "LastLogEvent");
+            ILogger logger = LogManager.GetLogger("A");
+            logger.Debug("Hello World {0}", "world", "universe");
+            var target = LogManager.Configuration.FindTargetByName<LastLogEventListTarget>("debug");
+
+            Assert.Equal(2, target.LastLogEvent.Parameters.Length);
+            Assert.Equal("world", target.LastLogEvent.Parameters[0]);
+            Assert.Equal("universe", target.LastLogEvent.Parameters[1]);
+        }
+
         [Theory]
         [InlineData(true, null)]
         [InlineData(false, null)]
@@ -1759,13 +1901,7 @@ namespace NLog.UnitTests
         [InlineData(null, null)]
         public void StructuredEventsConfigTest(bool? parseMessageTemplates, bool? overrideParseMessageTemplates)
         {
-            LogManager.Configuration = CreateConfigurationFromString(@"
-                <nlog parseMessageTemplates='" + (parseMessageTemplates?.ToString() ?? string.Empty) + @"'>
-                    <targets><target name='debug' type='Debug' layout='${message}${exception}' /></targets>
-                    <rules>
-                        <logger name='*' writeTo='debug' />
-                    </rules>
-                </nlog>");
+            LogManager.Configuration = CreateSimpleDebugConfig(parseMessageTemplates);
 
             if (parseMessageTemplates.HasValue)
             {
@@ -1854,6 +1990,8 @@ namespace NLog.UnitTests
                 logger.Error("message{a}{b}{c}", 1, 2, 3);
                 if (enabled == 1) AssertDebugLastMessage("debug", "message123");
 
+                logger.Error("message{a,2}{b,-2}{c,1}{d,-1}{f,1}", 1, 2, 3, 4, "");
+                if (enabled == 1) AssertDebugLastMessage("debug", "message 12 34\"\"");
 
                 //todo other tests
 
@@ -2016,9 +2154,40 @@ namespace NLog.UnitTests
 
             ILogger logger = LogManager.GetLogger("A");
 
-            logger.Error("Login request from {Username} for {Application}", "John", "BestApplicationEver");
+            logger.Error("Login request from {@Username} for {$Application}", new Person("John"), "BestApplicationEver");
 
-            AssertDebugLastMessage("debug", "{ \"LogMessage\": \"Login request from {Username} for {Application}\", \"Username\": \"John\", \"Application\": \"BestApplicationEver\" }");
+            AssertDebugLastMessage("debug", "{ \"LogMessage\": \"Login request from {@Username} for {$Application}\", \"Username\": {\"Name\":\"John\"}, \"Application\": \"BestApplicationEver\" }");
+        }
+
+        /// <summary>
+        /// Only properties
+        /// </summary>
+        [Fact]
+        public void TestStructuredProperties_json_async()
+        {
+            LogManager.Configuration = CreateConfigurationFromString(@"
+                <nlog throwExceptions='true'>
+                    <targets>
+                        <target name='debugbuffer' type='bufferingWrapper'>
+                            <target name='debug' type='Debug'  >
+                                    <layout type='JsonLayout' IncludeAllProperties='true'>
+                                        <attribute name='LogMessage' layout='${message:raw=true}' />
+                                    </layout>
+                            </target>
+                        </target>
+                    </targets>
+                    <rules>
+                        <logger name='*' levels='Error' writeTo='debugbuffer' />
+                    </rules>
+                </nlog>");
+
+            ILogger logger = LogManager.GetLogger("A");
+
+            System.Text.StringBuilder sb = new System.Text.StringBuilder("BestApplicationEver");
+            logger.Error("Login request from {@Username} for {$Application}", new Person("John"), sb);
+            sb.Clear();
+            LogManager.Flush();
+            AssertDebugLastMessage("debug", "{ \"LogMessage\": \"Login request from {@Username} for {$Application}\", \"Username\": {\"Name\":\"John\"}, \"Application\": \"BestApplicationEver\" }");
         }
 
         /// <summary>
@@ -2033,7 +2202,7 @@ namespace NLog.UnitTests
                         <target name='debug' type='Debug'  >
                               <layout type='CompoundLayout'>
                                 <layout type='SimpleLayout' text='${message}' />
-                                <layout type='JsonLayout' IncludeAllProperties='true' />
+                                <layout type='JsonLayout' IncludeAllProperties='true' maxRecursionLimit='0' />
                               </layout>
                         </target>
                     </targets>
@@ -2044,11 +2213,50 @@ namespace NLog.UnitTests
 
             ILogger logger = LogManager.GetLogger("A");
 
-            logger.Error("Login request from {Username} for {Application}", "John", "BestApplicationEver");
+            logger.Error("Login request from {Username} for {Application}", new Person("\"John\""), "BestApplicationEver");
 
-            AssertDebugLastMessage("debug", "Login request from \"John\" for \"BestApplicationEver\"{ \"Username\": \"John\", \"Application\": \"BestApplicationEver\" }");
+            AssertDebugLastMessage("debug", "Login request from \"John\" for \"BestApplicationEver\"{ \"Username\": \"\\\"John\\\"\", \"Application\": \"BestApplicationEver\" }");
         }
 
+        [Fact]
+        public void TestOptimizedBlackHoleLogger()
+        {
+            LogManager.ThrowExceptions = true;
+            LogManager.Configuration = CreateConfigurationFromString(@"
+                <nlog throwExceptions='true'>
+                    <targets>
+                        <target name='debug' type='Debug' layout='${message}' />
+                    </targets>
+                    <rules>
+                        <logger name='Microsoft*' maxLevel='Info' writeTo='' final='true' />
+                        <logger name='*' minlevel='Debug' writeTo='debug' />
+                    </rules>
+                </nlog>");
+
+            ILogger loggerMicrosoft = LogManager.GetLogger("Microsoft.NoiseGenerator");
+            ILogger loggerA = LogManager.GetLogger("A");
+
+            loggerMicrosoft.Warn("Important Noise");
+            AssertDebugLastMessage("debug", "Important Noise");
+            loggerMicrosoft.Debug("White Noise");
+            AssertDebugLastMessage("debug", "Important Noise");
+            loggerA.Debug("Good Noise");
+            AssertDebugLastMessage("debug", "Good Noise");
+            loggerA.Error("Important Noise");
+            AssertDebugLastMessage("debug", "Important Noise");
+        }
+
+
+        private static XmlLoggingConfiguration CreateSimpleDebugConfig(bool? parseMessageTemplates, string targetType = "Debug")
+        {
+            return CreateConfigurationFromString(@"
+                <nlog parseMessageTemplates='" + (parseMessageTemplates?.ToString() ?? string.Empty) + @"'>
+                    <targets><target name='debug' type='"+targetType+@"' layout='${message}${exception}' /></targets>
+                    <rules>
+                        <logger name='*' writeTo='debug' />
+                    </rules>
+                </nlog>");
+        }
 
         private class Person
         {
@@ -2065,6 +2273,7 @@ namespace NLog.UnitTests
 
             public List<Person> Childs { get; set; }
 
+            public override string ToString() { return Name; }
         }
 
         public abstract class BaseWrapper

@@ -1,5 +1,5 @@
 ﻿// 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -69,7 +69,7 @@ namespace NLog
             {
                 if (messageFunc == null)
                 {
-                    throw new ArgumentNullException("messageFunc");
+                    throw new ArgumentNullException(nameof(messageFunc));
                 }
 
                 logger.Trace(exception, messageFunc());
@@ -89,7 +89,7 @@ namespace NLog
             {
                 if (messageFunc == null)
                 {
-                    throw new ArgumentNullException("messageFunc");
+                    throw new ArgumentNullException(nameof(messageFunc));
                 }
 
                 logger.Debug(exception, messageFunc());
@@ -109,7 +109,7 @@ namespace NLog
             {
                 if (messageFunc == null)
                 {
-                    throw new ArgumentNullException("messageFunc");
+                    throw new ArgumentNullException(nameof(messageFunc));
                 }
 
                 logger.Info(exception, messageFunc());
@@ -129,7 +129,7 @@ namespace NLog
             {
                 if (messageFunc == null)
                 {
-                    throw new ArgumentNullException("messageFunc");
+                    throw new ArgumentNullException(nameof(messageFunc));
                 }
 
                 logger.Warn(exception, messageFunc());
@@ -149,7 +149,7 @@ namespace NLog
             {
                 if (messageFunc == null)
                 {
-                    throw new ArgumentNullException("messageFunc");
+                    throw new ArgumentNullException(nameof(messageFunc));
                 }
 
                 logger.Error(exception, messageFunc());
@@ -169,7 +169,7 @@ namespace NLog
             {
                 if (messageFunc == null)
                 {
-                    throw new ArgumentNullException("messageFunc");
+                    throw new ArgumentNullException(nameof(messageFunc));
                 }
 
                 logger.Fatal(exception, messageFunc());

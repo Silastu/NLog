@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -36,8 +36,8 @@ namespace NLog.Targets.Wrappers
     using System;
     using System.ComponentModel;
     using System.Threading;
-    using Common;
-    using Internal;
+    using NLog.Common;
+    using NLog.Internal;
 
     /// <summary>
     /// Provides asynchronous, buffered execution of target writes.
@@ -186,9 +186,9 @@ namespace NLog.Targets.Wrappers
         {
             if (_flushEventsInQueueDelegate == null)
                 _flushEventsInQueueDelegate = FlushEventsInQueue;
-            ThreadPool.QueueUserWorkItem(_flushEventsInQueueDelegate, asyncContinuation);
+            AsyncHelpers.StartAsyncTask(_flushEventsInQueueDelegate, asyncContinuation);
         }
-        private WaitCallback _flushEventsInQueueDelegate;
+        private Action<object> _flushEventsInQueueDelegate;
 
         /// <summary>
         /// Initializes the target by starting the lazy writer timer.
@@ -197,10 +197,10 @@ namespace NLog.Targets.Wrappers
         {
             base.InitializeTarget();
             if (!OptimizeBufferReuse && WrappedTarget != null && WrappedTarget.OptimizeBufferReuse)
-                OptimizeBufferReuse = GetType() == typeof(AsyncTargetWrapper); // TODO NLog 5 - Manual Opt-Out
+                OptimizeBufferReuse = GetType() == typeof(AsyncTargetWrapper); // Class not sealed, reduce breaking changes
 
             RequestQueue.Clear();
-            InternalLogger.Trace("AsyncWrapper '{0}': start timer", Name);
+            InternalLogger.Trace("AsyncWrapper(Name={0}): Start Timer", Name);
             _lazyWriterTimer = new Timer(ProcessPendingEvents, null, Timeout.Infinite, Timeout.Infinite);
             StartLazyWriterTimer();
         }
@@ -237,7 +237,7 @@ namespace NLog.Targets.Wrappers
                 {
                     if (TimeToSleepBetweenBatches <= 0)
                     {
-                        InternalLogger.Trace("AsyncWrapper '{0}': Throttled timer scheduled", Name);
+                        InternalLogger.Trace("AsyncWrapper(Name={0}): Throttled timer scheduled", Name);
                         _lazyWriterTimer.Change(1, Timeout.Infinite);
                     }
                     else
@@ -312,7 +312,6 @@ namespace NLog.Targets.Wrappers
         /// </remarks>
         protected override void Write(AsyncLogEventInfo logEvent)
         {
-            MergeEventProperties(logEvent.LogEvent);
             PrecalculateVolatileLayouts(logEvent.LogEvent);
             bool queueWasEmpty = RequestQueue.Enqueue(logEvent);
             if (queueWasEmpty && TimeToSleepBetweenBatches <= 0)
@@ -363,7 +362,7 @@ namespace NLog.Targets.Wrappers
             {
                 wroteFullBatchSize = false; // Something went wrong, lets throttle retry
 
-                InternalLogger.Error(exception, "AsyncWrapper '{0}': Error in lazy writer timer procedure.", Name);
+                InternalLogger.Error(exception, "AsyncWrapper(Name={0}): Error in lazy writer timer procedure.", Name);
 
                 if (exception.MustBeRethrownImmediately())
                 {
@@ -402,7 +401,7 @@ namespace NLog.Targets.Wrappers
             }
             catch (Exception exception)
             {
-                InternalLogger.Error(exception, "AsyncWrapper '{0}': Error in flush procedure.", Name);
+                InternalLogger.Error(exception, "AsyncWrapper(Name={0}): Error in flush procedure.", Name);
 
                 if (exception.MustBeRethrownImmediately())
                 {
@@ -415,7 +414,7 @@ namespace NLog.Targets.Wrappers
         {
             if (WrappedTarget == null)
             {
-                InternalLogger.Error("AsyncWrapper '{0}': WrappedTarget is NULL", Name);
+                InternalLogger.Error("AsyncWrapper(Name={0}): WrappedTarget is NULL", Name);
                 return 0;
             }
 
@@ -428,7 +427,7 @@ namespace NLog.Targets.Wrappers
                     if (logEvents.Length > 0)
                     {
                         if (reason != null)
-                            InternalLogger.Trace("AsyncWrapper '{0}': writing {1} events ({2})", Name, logEvents.Length, reason);
+                            InternalLogger.Trace("AsyncWrapper(Name={0}): Writing {1} events ({2})", Name, logEvents.Length, reason);
                         WrappedTarget.WriteAsyncLogEvents(logEvents);
                     }
                     count = logEvents.Length;
@@ -442,7 +441,7 @@ namespace NLog.Targets.Wrappers
                         if (logEvents.Count > 0)
                         {
                             if (reason != null)
-                                InternalLogger.Trace("AsyncWrapper '{0}': writing {1} events ({2})", Name, logEvents.Count, reason);
+                                InternalLogger.Trace("AsyncWrapper(Name={0}): Writing {1} events ({2})", Name, logEvents.Count, reason);
                             WrappedTarget.WriteAsyncLogEvents(logEvents);
                         }
                         count = logEvents.Count;

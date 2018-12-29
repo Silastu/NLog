@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -40,7 +40,7 @@ namespace NLog.Internal
     /// </summary>
 
 #if DEBUG
-     [System.Diagnostics.DebuggerDisplay("{CurrentState}")]
+     [System.Diagnostics.DebuggerDisplay("{" + nameof(CurrentState) + "}")]
 #endif
 	internal class SimpleStringReader
 	{

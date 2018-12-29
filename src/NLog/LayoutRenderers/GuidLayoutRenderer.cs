@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -36,11 +36,13 @@ namespace NLog.LayoutRenderers
     using System;
     using System.ComponentModel;
     using System.Text;
+    using NLog.Config;
 
     /// <summary>
     /// Globally-unique identifier (GUID).
     /// </summary>
     [LayoutRenderer("guid")]
+    [ThreadSafe]
     public class GuidLayoutRenderer : LayoutRenderer
     {
         /// <summary>
@@ -61,6 +63,7 @@ namespace NLog.LayoutRenderers
         /// <summary>
         /// Generate the Guid from the NLog LogEvent (Will be the same for all targets)
         /// </summary>
+        /// <docgen category='Rendering Options' order='100' />
         [DefaultValue(false)]
         public bool GeneratedFromLogEvent { get; set; }
 

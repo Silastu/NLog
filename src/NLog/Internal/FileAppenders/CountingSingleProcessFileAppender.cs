@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -36,7 +36,7 @@ namespace NLog.Internal.FileAppenders
     using System;
     using System.IO;
     using System.Security;
-    using Common;
+    using NLog.Common;
 
     /// <summary>
     /// Implementation of <see cref="BaseFileAppender"/> which caches 
@@ -60,20 +60,7 @@ namespace NLog.Internal.FileAppenders
             : base(fileName, parameters)
         {
             var fileInfo = new FileInfo(fileName);
-            if (fileInfo.Exists)
-            {
-                if (CaptureLastWriteTime)
-                {
-                    FileTouched(fileInfo.GetLastWriteTimeUtc());
-                }
-                _currentFileLength = fileInfo.Length;
-            }
-            else
-            {
-                FileTouched();
-                _currentFileLength = 0;
-            }
-
+            _currentFileLength = fileInfo.Exists ? fileInfo.Length : 0;
             _file = CreateFileStream(false);
         }
 
@@ -94,7 +81,7 @@ namespace NLog.Internal.FileAppenders
                 {
                     // Swallow exception as the file-stream now is in final state (broken instead of closed)
                     InternalLogger.Warn(ex, "Failed to close file: '{0}'", FileName);
-                    System.Threading.Thread.Sleep(1);   // Artificial delay to avoid hammering a bad file location
+                    AsyncHelpers.WaitForDelay(TimeSpan.FromMilliseconds(1));    // Artificial delay to avoid hammering a bad file location
                 }
                 finally
                 {
@@ -114,7 +101,6 @@ namespace NLog.Internal.FileAppenders
             }
 
             _file.Flush();
-            FileTouched();
         }
 
         /// <summary>
@@ -125,16 +111,6 @@ namespace NLog.Internal.FileAppenders
         public override DateTime? GetFileCreationTimeUtc()
         {
             return CreationTimeUtc;
-        }
-
-        /// <summary>
-        /// Gets the last time the file associated with the appeander is written. The time returned is in Coordinated 
-        /// Universal Time [UTC] standard.
-        /// </summary>
-        /// <returns>The time the file was last written to.</returns>
-        public override DateTime? GetFileLastWriteTimeUtc()
-        {
-            return LastWriteTimeUtc;
         }
 
         /// <summary>
@@ -161,11 +137,6 @@ namespace NLog.Internal.FileAppenders
 
             _currentFileLength += count;
             _file.Write(bytes, offset, count);
-
-            if (CaptureLastWriteTime)
-            {
-                FileTouched();
-            }
         }
 
         /// <summary>

@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -38,13 +38,14 @@ namespace NLog.Config
     using System.Collections.ObjectModel;
     using System.Globalization;
     using System.Linq;
-
+    using System.Threading;
     using JetBrains.Annotations;
 
     using NLog.Common;
     using NLog.Internal;
     using NLog.Layouts;
     using NLog.Targets;
+    using NLog.Targets.Wrappers;
 
     /// <summary>
     /// Keeps logging configuration and provides simple API
@@ -64,10 +65,24 @@ namespace NLog.Config
         private readonly Dictionary<string, SimpleLayout> _variables = new Dictionary<string, SimpleLayout>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
+        /// Gets the factory that will be configured
+        /// </summary>
+        public LogFactory LogFactory { get; }
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="LoggingConfiguration" /> class.
         /// </summary>
         public LoggingConfiguration()
+            : this(LogManager.LogFactory)
         {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="LoggingConfiguration" /> class.
+        /// </summary>
+        public LoggingConfiguration(LogFactory logFactory)
+        {
+            LogFactory = logFactory;
             LoggingRules = new List<LoggingRule>();
         }
 
@@ -92,7 +107,7 @@ namespace NLog.Config
         /// <remarks>
         /// Unnamed targets (such as those wrapped by other targets) are not returned.
         /// </remarks>
-        public ReadOnlyCollection<Target> ConfiguredNamedTargets => new List<Target>(_targets.Values).AsReadOnly();
+        public ReadOnlyCollection<Target> ConfiguredNamedTargets => GetAllTargetsThreadSafe().AsReadOnly();
 
         /// <summary>
         /// Gets the collection of file names which should be watched for changes by NLog.
@@ -103,6 +118,53 @@ namespace NLog.Config
         /// Gets the collection of logging rules.
         /// </summary>
         public IList<LoggingRule> LoggingRules { get; private set; }
+
+        internal List<LoggingRule> GetLoggingRulesThreadSafe() { lock (LoggingRules) return LoggingRules.ToList(); }
+        private void AddLoggingRulesThreadSafe(LoggingRule rule) { lock (LoggingRules) LoggingRules.Add(rule); }
+
+        private bool TryGetTargetThreadSafe(string name, out Target target) { lock (_targets) return _targets.TryGetValue(name, out target); }
+        private List<Target> GetAllTargetsThreadSafe() { lock (_targets) return _targets.Values.ToList(); }
+
+        private Target RemoveTargetThreadSafe(string name)
+        {
+            Target target;
+            lock (_targets)
+            {
+                if (_targets.TryGetValue(name, out target))
+                {
+                    _targets.Remove(name);
+                }
+            }
+
+            if (target != null)
+            {
+                InternalLogger.Debug("Unregistered target {0}: {1}", name, target.GetType().FullName);
+            }
+            return target;
+        }
+
+        private void AddTargetThreadSafe(string name, Target target, bool forceOverwrite)
+        {
+            if (string.IsNullOrEmpty(name) && !forceOverwrite)
+                return;
+
+            lock (_targets)
+            {
+                if (!forceOverwrite && _targets.ContainsKey(name))
+                    return;
+
+                _targets[name] = target;
+            }
+
+            if (!string.IsNullOrEmpty(target.Name) && target.Name != name)
+            {
+                InternalLogger.Info("Registered target {0}: {1} (Target created with different name: {2})", name, target.GetType().FullName, target.Name);
+            }
+            else
+            {
+                InternalLogger.Debug("Registered target {0}: {1}", name, target.GetType().FullName);
+            }
+        }
 
         /// <summary>
         /// Gets or sets the default culture info to use as <see cref="LogEventInfo.FormatProvider"/>.
@@ -121,7 +183,7 @@ namespace NLog.Config
             get
             {
                 var configTargets = _configItems.OfType<Target>();
-                return configTargets.Concat(_targets.Values).Distinct(TargetNameComparer).ToList().AsReadOnly();
+                return configTargets.Concat(GetAllTargetsThreadSafe()).Distinct(TargetNameComparer).ToList().AsReadOnly();
             }
         }
 
@@ -129,13 +191,13 @@ namespace NLog.Config
         /// Compare <see cref="Target"/> objects based on their name.
         /// </summary>
         /// <remarks>This property is use to cache the comparer object.</remarks>
-        private readonly static IEqualityComparer<Target> TargetNameComparer = new TargetNameEqualityComparer();
+        private static readonly IEqualityComparer<Target> TargetNameComparer = new TargetNameEqualityComparer();
 
         /// <summary>
         /// Defines methods to support the comparison of <see cref="Target"/> objects for equality based on their name.
         /// </summary>
         private class TargetNameEqualityComparer : IEqualityComparer<Target>
-        {          
+        {
             public bool Equals(Target x, Target y)
             {
                 return string.Equals(x.Name, y.Name);
@@ -143,7 +205,7 @@ namespace NLog.Config
 
             public int GetHashCode(Target obj)
             {
-               return (obj.Name != null ? obj.Name.GetHashCode() : 0);
+                return (obj.Name != null ? obj.Name.GetHashCode() : 0);
             }
         }
 
@@ -156,19 +218,17 @@ namespace NLog.Config
         /// <exception cref="ArgumentNullException">when <paramref name="target"/> is <see langword="null"/></exception>
         public void AddTarget([NotNull] Target target)
         {
-            if (target == null) { throw new ArgumentNullException("target"); }
-            AddTarget(target.Name, target);
+            if (target == null) { throw new ArgumentNullException(nameof(target)); }
+            if (target.Name == null) { throw new ArgumentNullException(nameof(target) + ".Name cannot be null."); }
+
+            AddTargetThreadSafe(target.Name, target, true);
         }
 
         /// <summary>
         /// Registers the specified target object under a given name.
         /// </summary>
-        /// <param name="name">
-        /// Name of the target.
-        /// </param>
-        /// <param name="target">
-        /// The target object.
-        /// </param>
+        /// <param name="name">Name of the target.</param>
+        /// <param name="target">The target object.</param>
         /// <exception cref="ArgumentException">when <paramref name="name"/> is <see langword="null"/></exception>
         /// <exception cref="ArgumentNullException">when <paramref name="target"/> is <see langword="null"/></exception>
         public void AddTarget(string name, Target target)
@@ -176,13 +236,12 @@ namespace NLog.Config
             if (name == null)
             {
                 // TODO: NLog 5 - The ArgumentException should be changed to ArgumentNullException for name parameter.
-                throw new ArgumentException("Target name cannot be null", "name");
+                throw new ArgumentException("Target name cannot be null", nameof(name));
             }
 
-            if (target == null) { throw new ArgumentNullException("target"); }
+            if (target == null) { throw new ArgumentNullException(nameof(target)); }
 
-            InternalLogger.Debug("Registering target {0}: {1}", name, target.GetType().FullName);
-            _targets[name] = target;
+            AddTargetThreadSafe(name, target, true);
         }
 
         /// <summary>
@@ -197,8 +256,7 @@ namespace NLog.Config
         public Target FindTargetByName(string name)
         {
             Target value;
-
-            if (!_targets.TryGetValue(name, out value))
+            if (!TryGetTargetThreadSafe(name, out value))
             {
                 return null;
             }
@@ -237,7 +295,7 @@ namespace NLog.Config
                 throw new NLogRuntimeException("Target '{0}' not found", targetName);
             }
 
-            AddRule(minLevel, maxLevel, target, loggerNamePattern);
+            AddRule(minLevel, maxLevel, target, loggerNamePattern, false);
         }
 
         /// <summary>
@@ -249,7 +307,23 @@ namespace NLog.Config
         /// <param name="loggerNamePattern">Logger name pattern. It may include the '*' wildcard at the beginning, at the end or at both ends.</param>
         public void AddRule(LogLevel minLevel, LogLevel maxLevel, Target target, string loggerNamePattern = "*")
         {
-            LoggingRules.Add(new LoggingRule(loggerNamePattern, minLevel, maxLevel, target));
+            if (target == null) { throw new ArgumentNullException(nameof(target)); }
+            AddRule(minLevel, maxLevel, target, loggerNamePattern, false);
+        }
+
+        /// <summary>
+        /// Add a rule with min- and maxLevel.
+        /// </summary>
+        /// <param name="minLevel">Minimum log level needed to trigger this rule.</param>
+        /// <param name="maxLevel">Maximum log level needed to trigger this rule.</param>
+        /// <param name="target">Target to be written to when the rule matches.</param>
+        /// <param name="loggerNamePattern">Logger name pattern. It may include the '*' wildcard at the beginning, at the end or at both ends.</param>
+        /// <param name="final">Gets or sets a value indicating whether to quit processing any further rule when this one matches.</param>
+        public void AddRule(LogLevel minLevel, LogLevel maxLevel, Target target, string loggerNamePattern, bool final)
+        {
+            if (target == null) { throw new ArgumentNullException(nameof(target)); }
+            AddLoggingRulesThreadSafe(new LoggingRule(loggerNamePattern, minLevel, maxLevel, target) { Final = final });
+            AddTargetThreadSafe(target.Name, target, false);
         }
 
         /// <summary>
@@ -266,7 +340,7 @@ namespace NLog.Config
                 throw new NLogConfigurationException("Target '{0}' not found", targetName);
             }
 
-            AddRuleForOneLevel(level, target, loggerNamePattern);
+            AddRuleForOneLevel(level, target, loggerNamePattern, false);
         }
 
         /// <summary>
@@ -277,9 +351,24 @@ namespace NLog.Config
         /// <param name="loggerNamePattern">Logger name pattern. It may include the '*' wildcard at the beginning, at the end or at both ends.</param>
         public void AddRuleForOneLevel(LogLevel level, Target target, string loggerNamePattern = "*")
         {
-            var loggingRule = new LoggingRule(loggerNamePattern, target);
+            if (target == null) { throw new ArgumentNullException(nameof(target)); }
+            AddRuleForOneLevel(level, target, loggerNamePattern, false);
+        }
+
+        /// <summary>
+        /// Add a rule for one loglevel.
+        /// </summary>
+        /// <param name="level">log level needed to trigger this rule. </param>
+        /// <param name="target">Target to be written to when the rule matches.</param>
+        /// <param name="loggerNamePattern">Logger name pattern. It may include the '*' wildcard at the beginning, at the end or at both ends.</param>
+        /// <param name="final">Gets or sets a value indicating whether to quit processing any further rule when this one matches.</param>
+        public void AddRuleForOneLevel(LogLevel level, Target target, string loggerNamePattern, bool final)
+        {
+            if (target == null) { throw new ArgumentNullException(nameof(target)); }
+            var loggingRule = new LoggingRule(loggerNamePattern, target) { Final = final };
             loggingRule.EnableLoggingForLevel(level);
-            LoggingRules.Add(loggingRule);
+            AddLoggingRulesThreadSafe(loggingRule);
+            AddTargetThreadSafe(target.Name, target, false);
         }
 
         /// <summary>
@@ -295,7 +384,7 @@ namespace NLog.Config
                 throw new NLogRuntimeException("Target '{0}' not found", targetName);
             }
 
-            AddRuleForAllLevels(target, loggerNamePattern);
+            AddRuleForAllLevels(target, loggerNamePattern, false);
         }
 
         /// <summary>
@@ -305,9 +394,23 @@ namespace NLog.Config
         /// <param name="loggerNamePattern">Logger name pattern. It may include the '*' wildcard at the beginning, at the end or at both ends.</param>
         public void AddRuleForAllLevels(Target target, string loggerNamePattern = "*")
         {
-            var loggingRule = new LoggingRule(loggerNamePattern, target);
+            if (target == null) { throw new ArgumentNullException(nameof(target)); }
+            AddRuleForAllLevels(target, loggerNamePattern, false);
+        }
+
+        /// <summary>
+        /// Add a rule for alle loglevels.
+        /// </summary>
+        /// <param name="target">Target to be written to when the rule matches.</param>
+        /// <param name="loggerNamePattern">Logger name pattern. It may include the '*' wildcard at the beginning, at the end or at both ends.</param>
+        /// <param name="final">Gets or sets a value indicating whether to quit processing any further rule when this one matches.</param>
+        public void AddRuleForAllLevels(Target target, string loggerNamePattern, bool final)
+        {
+            if (target == null) { throw new ArgumentNullException(nameof(target)); }
+            var loggingRule = new LoggingRule(loggerNamePattern, target) { Final = final };
             loggingRule.EnableLoggingForLevels(LogLevel.MinLevel, LogLevel.MaxLevel);
-            LoggingRules.Add(loggingRule);
+            AddLoggingRulesThreadSafe(loggingRule);
+            AddTargetThreadSafe(target.Name, target, false);
         }
 
         /// <summary>
@@ -324,12 +427,59 @@ namespace NLog.Config
         /// <summary>
         /// Removes the specified named target.
         /// </summary>
-        /// <param name="name">
-        /// Name of the target.
-        /// </param>
+        /// <param name="name">Name of the target.</param>
         public void RemoveTarget(string name)
         {
-            _targets.Remove(name);
+            HashSet<Target> removedTargets = new HashSet<Target>();
+            Target removedTarget = RemoveTargetThreadSafe(name);
+            if (removedTarget != null)
+            {
+                removedTargets.Add(removedTarget);
+            }
+
+            if (!string.IsNullOrEmpty(name) || removedTarget != null)
+            {
+                var loggingRules = GetLoggingRulesThreadSafe();
+
+                foreach (var rule in loggingRules)
+                {
+                    var targetList = rule.GetTargetsThreadSafe();
+                    foreach (var target in targetList)
+                    {
+                        if (ReferenceEquals(removedTarget, target) || (!string.IsNullOrEmpty(name) && target.Name == name))
+                        {
+                            removedTargets.Add(target);
+                            rule.RemoveTargetThreadSafe(target);
+                        }
+                    }
+                }
+            }
+
+            if (removedTargets.Count > 0)
+            {
+                ValidateConfig();   // Refresh internal list of configurable items (_configItems)
+
+                // Refresh active logger-objects, so they stop using the removed target
+                //  - Can be called even if no LoggingConfiguration is loaded (will not trigger a config load)
+                if (LogFactory != null)
+                {
+                    LogFactory.ReconfigExistingLoggers();
+                }
+                else
+                {
+                    LogManager.ReconfigExistingLoggers();
+                }
+
+                // Perform flush and close after having stopped logger-objects from using the target
+                ManualResetEvent flushCompleted = new ManualResetEvent(false);
+                foreach (var target in removedTargets)
+                {
+                    flushCompleted.Reset();
+                    target.Flush((ex) => flushCompleted.Set());
+                    flushCompleted.WaitOne(TimeSpan.FromSeconds(15));
+                    target.Close();
+                }
+            }
         }
 
         /// <summary>
@@ -343,7 +493,7 @@ namespace NLog.Config
         {
             if (installationContext == null)
             {
-                throw new ArgumentNullException("installationContext");
+                throw new ArgumentNullException(nameof(installationContext));
             }
 
             InitializeAll();
@@ -381,7 +531,7 @@ namespace NLog.Config
         {
             if (installationContext == null)
             {
-                throw new ArgumentNullException("installationContext");
+                throw new ArgumentNullException(nameof(installationContext));
             }
 
             InitializeAll();
@@ -456,15 +606,14 @@ namespace NLog.Config
 
             InternalLogger.Debug("--- NLog configuration dump ---");
             InternalLogger.Debug("Targets:");
-            var targetList = _targets.Values.ToList();
+            var targetList = GetAllTargetsThreadSafe();
             foreach (Target target in targetList)
             {
                 InternalLogger.Debug("{0}", target);
             }
 
             InternalLogger.Debug("Rules:");
-            var loggingRules = LoggingRules.ToList();
-            foreach (LoggingRule rule in loggingRules)
+            foreach (LoggingRule rule in GetLoggingRulesThreadSafe())
             {
                 InternalLogger.Debug("{0}", rule);
             }
@@ -481,10 +630,9 @@ namespace NLog.Config
             InternalLogger.Trace("Flushing all targets...");
 
             var uniqueTargets = new List<Target>();
-            var loggingRules = LoggingRules.ToList();
-            foreach (var rule in loggingRules)
+            foreach (var rule in GetLoggingRulesThreadSafe())
             {
-                var targetList = rule.Targets.ToList();
+                var targetList = rule.GetTargetsThreadSafe();
                 foreach (var target in targetList)
                 {
                     if (!uniqueTargets.Contains(target))
@@ -504,13 +652,12 @@ namespace NLog.Config
         {
             var roots = new List<object>();
 
-            var loggingRules = LoggingRules.ToList();
-            foreach (LoggingRule rule in loggingRules)
+            foreach (LoggingRule rule in GetLoggingRulesThreadSafe())
             {
                 roots.Add(rule);
             }
 
-            var targetList = _targets.Values.ToList();
+            var targetList = GetAllTargetsThreadSafe();
             foreach (Target target in targetList)
             {
                 roots.Add(target);
@@ -550,7 +697,7 @@ namespace NLog.Config
 
                     if (LogManager.ThrowExceptions)
                     {
-                        throw new NLogConfigurationException("Error during initialization of " + initialize, exception);
+                        throw new NLogConfigurationException($"Error during initialization of {initialize}", exception);
                     }
                 }
             }
@@ -586,6 +733,82 @@ namespace NLog.Config
             {
                 Variables[variable.Key] = variable.Value;
             }
+        }
+
+        /// <summary>
+        /// Replace a simple variable with a value. The orginal value is removed and thus we cannot redo this in a later stage.
+        /// </summary>
+        /// <param name="input"></param>
+        /// <returns></returns>
+        internal string ExpandSimpleVariables(string input)
+        {
+            string output = input;
+
+            // TODO - make this case-insensitive, will probably require a different approach
+            var variables = Variables.ToList();
+            foreach (var kvp in variables)
+            {
+                var layout = kvp.Value;
+                //this value is set from xml and that's a string. Because of that, we can use SimpleLayout here.
+                if (layout != null) output = output.Replace(string.Concat("${", kvp.Key, "}"), layout.OriginalText);
+            }
+
+            return output;
+        }
+
+        /// <summary>
+        /// Checks whether unused targets exist. If found any, just write an internal log at Warn level.
+        /// <remarks>If initializing not started or failed, then checking process will be canceled</remarks>
+        /// </summary>
+        internal void CheckUnusedTargets()
+        {
+            ReadOnlyCollection<Target> configuredNamedTargets = ConfiguredNamedTargets; //assign to variable because `ConfiguredNamedTargets` computes a new list every time.
+            InternalLogger.Debug("Unused target checking is started... Rule Count: {0}, Target Count: {1}", LoggingRules.Count, configuredNamedTargets.Count);
+
+            HashSet<string> targetNamesAtRules = new HashSet<string>(GetLoggingRulesThreadSafe().SelectMany(r => r.Targets).Select(t => t.Name));
+            var wrappedTargets = configuredNamedTargets.OfType<WrapperTargetBase>().ToLookup(wt => wt.WrappedTarget, wt => wt);
+            var compoundTargets = configuredNamedTargets.OfType<CompoundTargetBase>().SelectMany(wt => wt.Targets.Select(t => new KeyValuePair<Target, Target>(t, wt))).ToLookup(p => p.Key, p => p.Value);
+
+            int unusedCount = configuredNamedTargets.Count((target) =>
+            {
+                if (targetNamesAtRules.Contains(target.Name))
+                    return false;
+
+                if (wrappedTargets.Contains(target))
+                {
+                    foreach (var wrapperTarget in wrappedTargets[target])
+                    {
+                        if (targetNamesAtRules.Contains(wrapperTarget.Name))
+                            return false;
+
+                        if (wrappedTargets.Contains(wrapperTarget))
+                            return false;   // Double nested targets are too complicated
+
+                        if (compoundTargets.Contains(wrapperTarget))
+                            return false;   // Double nested targets are too complicated
+                    }
+                }
+
+                if (compoundTargets.Contains(target))
+                {
+                    foreach (var wrapperTarget in compoundTargets[target])
+                    {
+                        if (targetNamesAtRules.Contains(wrapperTarget.Name))
+                            return false;
+
+                        if (wrappedTargets.Contains(wrapperTarget))
+                            return false;   // Double nested targets are too complicated
+
+                        if (compoundTargets.Contains(wrapperTarget))
+                            return false;   // Double nested targets are too complicated
+                    }
+                }
+
+                InternalLogger.Warn("Unused target detected. Add a rule for this target to the configuration. TargetName: {0}", target.Name);
+                return true;
+            });
+
+            InternalLogger.Debug("Unused target checking is completed. Total Rule Count: {0}, Total Target Count: {1}, Unused Target Count: {2}", LoggingRules.Count, configuredNamedTargets.Count, unusedCount);
         }
     }
 }

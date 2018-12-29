@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -40,13 +40,13 @@ namespace NLog.Config
     using System;
     using System.Collections.Generic;
     using System.Reflection;
-    using Conditions;
-    using Filters;
-    using Internal;
-    using LayoutRenderers;
-    using Layouts;
-    using Targets;
-    using Time;
+    using NLog.Conditions;
+    using NLog.Filters;
+    using NLog.Internal;
+    using NLog.LayoutRenderers;
+    using NLog.Layouts;
+    using NLog.Targets;
+    using NLog.Time;
 
     /// <summary>
     /// Provides registration information for named items (targets, layouts, layout renderers, etc.) managed by NLog.
@@ -55,7 +55,7 @@ namespace NLog.Config
     /// </summary>
     public class ConfigurationItemFactory
     {
-        private static ConfigurationItemFactory defaultInstance = null;
+        private static ConfigurationItemFactory defaultInstance;
 
         private readonly IList<object> _allFactories;
         private readonly Factory<Target, TargetAttribute> _targets;
@@ -113,12 +113,7 @@ namespace NLog.Config
         /// </remarks>
         public static ConfigurationItemFactory Default
         {
-            get
-            {
-                if (defaultInstance == null)
-                    defaultInstance = BuildDefaultFactory();
-                return defaultInstance;
-            }
+            get => defaultInstance ?? (defaultInstance = BuildDefaultFactory());
             set => defaultInstance = value;
         }
 
@@ -192,10 +187,10 @@ namespace NLog.Config
         /// <summary>
         /// Gets or sets the string serializer to use with <see cref="LogEventInfo.MessageTemplateParameters"/>
         /// </summary>
-        public IValueSerializer ValueSerializer
+        public IValueFormatter ValueFormatter
         {
-            get => MessageTemplates.ValueSerializer.Instance;
-            set => MessageTemplates.ValueSerializer.Instance = value;
+            get => MessageTemplates.ValueFormatter.Instance;
+            set => MessageTemplates.ValueFormatter.Instance = value;
         }
 
         /// <summary>
@@ -203,7 +198,7 @@ namespace NLog.Config
         /// </summary>
         /// <remarks>
         /// - Null (Auto Detect) : NLog-parser checks <see cref="LogEventInfo.Message"/> for positional parameters, and will then fallback to string.Format-rendering.
-        /// - True: Always performs the parsing of <see cref="LogEventInfo.Message"/> and rendering of <see cref="LogEventInfo.FormattedMessage"/> using the NLog-parser (Allows custom formatting with <see cref="ValueSerializer"/>)
+        /// - True: Always performs the parsing of <see cref="LogEventInfo.Message"/> and rendering of <see cref="LogEventInfo.FormattedMessage"/> using the NLog-parser (Allows custom formatting with <see cref="ValueFormatter"/>)
         /// - False: Always performs parsing and rendering using string.Format (Fastest if not using structured logging)
         /// </remarks>
         public bool? ParseMessageTemplates
@@ -257,7 +252,7 @@ namespace NLog.Config
             if (AssemblyLoading != null)
             {
                 var args = new AssemblyLoadingEventArgs(assembly);
-                AssemblyLoading.Invoke(this,args);
+                AssemblyLoading.Invoke(null, args);
                 if (args.Cancel)
                 {
                     InternalLogger.Info("Loading assembly '{0}' is canceled", assembly.FullName);
@@ -366,37 +361,32 @@ namespace NLog.Config
             var nlogAssembly = typeof(ILogger).GetAssembly();
             var factory = new ConfigurationItemFactory(nlogAssembly);
             factory.RegisterExtendedItems();
-#if !SILVERLIGHT
 
+#if !SILVERLIGHT && !NETSTANDARD1_3
             try
             {
-                Uri assemblyCodeBase;
-                if (!Uri.TryCreate(nlogAssembly.CodeBase, UriKind.RelativeOrAbsolute, out assemblyCodeBase))
+                var assemblyLocation = string.Empty;
+                var extensionDlls = ArrayHelper.Empty<string>();
+                var fileLocations = GetAutoLoadingFileLocations();
+                foreach (var fileLocation in fileLocations)
                 {
-                    InternalLogger.Warn("No auto loading because assembly code base is unknown");
-                    return factory;
-                }
+                    if (string.IsNullOrEmpty(fileLocation.Key))
+                        continue;
 
-                var assemblyLocation = Path.GetDirectoryName(assemblyCodeBase.LocalPath);
-                if (assemblyLocation == null)
-                {
-                    InternalLogger.Warn("No auto loading because Nlog.dll location is unknown");
-                    return factory;
-                }
-                if (!Directory.Exists(assemblyLocation))
-                {
-                    InternalLogger.Warn("No auto loading because '{0}' doesn't exists", assemblyLocation);
-                    return factory;
-                }
+                    if (string.IsNullOrEmpty(assemblyLocation))
+                        assemblyLocation = fileLocation.Key;
 
-                var extensionDlls = Directory.GetFiles(assemblyLocation, "NLog*.dll")
-                    .Select(Path.GetFileName)
-                    .Where(x => !x.Equals("NLog.dll", StringComparison.OrdinalIgnoreCase))
-                    .Where(x => !x.Equals("NLog.UnitTests.dll", StringComparison.OrdinalIgnoreCase))
-                    .Where(x => !x.Equals("NLog.Extended.dll", StringComparison.OrdinalIgnoreCase))
-                    .Select(x => Path.Combine(assemblyLocation, x));
+                    extensionDlls = GetNLogExtensionFiles(fileLocation.Key);
+                    if (extensionDlls.Length != 0)
+                    {
+                        assemblyLocation = fileLocation.Key;
+                        break;
+                    }
+                }
 
                 InternalLogger.Debug("Start auto loading, location: {0}", assemblyLocation);
+                HashSet<string> alreadyRegistered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                alreadyRegistered.Add(nlogAssembly.FullName);
                 foreach (var extensionDll in extensionDlls)
                 {
                     InternalLogger.Info("Auto loading assembly file: {0}", extensionDll);
@@ -406,6 +396,7 @@ namespace NLog.Config
                         var extensionAssembly = AssemblyHelpers.LoadFromPath(extensionDll);
                         InternalLogger.LogAssemblyVersion(extensionAssembly);
                         factory.RegisterItemsFromAssembly(extensionAssembly);
+                        alreadyRegistered.Add(extensionAssembly.FullName);
                         success = true;
                     }
                     catch (Exception ex)
@@ -422,8 +413,29 @@ namespace NLog.Config
                     {
                         InternalLogger.Info("Auto loading assembly file: {0} succeeded!", extensionDll);
                     }
-
                 }
+
+#if !NETSTANDARD1_0
+                var allAssemblies = LogFactory.CurrentAppDomain.GetAssemblies();
+                foreach (var assembly in allAssemblies)
+                {
+                    if (assembly.FullName.StartsWith("NLog.", StringComparison.OrdinalIgnoreCase) && !alreadyRegistered.Contains(assembly.FullName))
+                    {
+                        factory.RegisterItemsFromAssembly(assembly);
+                    }
+
+                    if ( assembly.FullName.StartsWith("NLog.Extensions.Logging,", StringComparison.OrdinalIgnoreCase)
+                      || assembly.FullName.StartsWith("NLog.Web,", StringComparison.OrdinalIgnoreCase)
+                      || assembly.FullName.StartsWith("NLog.Web.AspNetCore,", StringComparison.OrdinalIgnoreCase)
+                      || assembly.FullName.StartsWith("Microsoft.Extensions.Logging,", StringComparison.OrdinalIgnoreCase)
+                      || assembly.FullName.StartsWith("Microsoft.Extensions.Logging.Abstractions,", StringComparison.OrdinalIgnoreCase)
+                      || assembly.FullName.StartsWith("Microsoft.Extensions.Logging.Filter,", StringComparison.OrdinalIgnoreCase)
+                      || assembly.FullName.StartsWith("Microsoft.Logging,", StringComparison.OrdinalIgnoreCase))
+                    {
+                        LogManager.AddHiddenAssembly(assembly);
+                    }
+                }
+#endif
             }
             catch (System.Security.SecurityException ex)
             {
@@ -443,9 +455,76 @@ namespace NLog.Config
             }
             InternalLogger.Debug("Auto loading done");
 #endif
-
             return factory;
         }
+
+#if !SILVERLIGHT && !NETSTANDARD1_3
+        internal static IEnumerable<KeyValuePair<string, Assembly>> GetAutoLoadingFileLocations()
+        {
+            var nlogAssembly = typeof(ILogger).GetAssembly();
+            var assemblyLocation = PathHelpers.TrimDirectorySeparators(AssemblyHelpers.GetAssemblyFileLocation(nlogAssembly));
+            if (!string.IsNullOrEmpty(assemblyLocation))
+                yield return new KeyValuePair<string, Assembly>(assemblyLocation, nlogAssembly);
+
+            var entryAssembly = Assembly.GetEntryAssembly();
+            var entryLocation = PathHelpers.TrimDirectorySeparators(AssemblyHelpers.GetAssemblyFileLocation(Assembly.GetEntryAssembly()));
+            if (!string.IsNullOrEmpty(entryLocation) && !string.Equals(entryLocation, assemblyLocation, StringComparison.OrdinalIgnoreCase))
+                yield return new KeyValuePair<string, Assembly>(entryLocation, entryAssembly);
+
+            // TODO Consider to prioritize AppDomain.PrivateBinPath
+            var baseDirectory = PathHelpers.TrimDirectorySeparators(LogFactory.CurrentAppDomain.BaseDirectory);
+            InternalLogger.Debug("Auto loading based on AppDomain-BaseDirectory found location: {0}", baseDirectory);
+            if (!string.IsNullOrEmpty(baseDirectory) && !string.Equals(baseDirectory, assemblyLocation, StringComparison.OrdinalIgnoreCase))
+                yield return new KeyValuePair<string, Assembly>(baseDirectory, null);
+        }
+
+        private static string[] GetNLogExtensionFiles(string assemblyLocation)
+        {
+            try
+            {
+                InternalLogger.Debug("Search for auto loading files in location: {0}", assemblyLocation);
+                if (string.IsNullOrEmpty(assemblyLocation))
+                {
+                    return ArrayHelper.Empty<string>();
+                }
+
+                var extensionDlls = Directory.GetFiles(assemblyLocation, "NLog*.dll")
+                .Select(Path.GetFileName)
+                .Where(x => !x.Equals("NLog.dll", StringComparison.OrdinalIgnoreCase))
+                .Where(x => !x.Equals("NLog.UnitTests.dll", StringComparison.OrdinalIgnoreCase))
+                .Where(x => !x.Equals("NLog.Extended.dll", StringComparison.OrdinalIgnoreCase))
+                .Select(x => Path.Combine(assemblyLocation, x));
+                return extensionDlls.ToArray();
+            }
+            catch (System.IO.DirectoryNotFoundException ex)
+            {
+                InternalLogger.Warn(ex, "Skipping auto loading location because assembly directory does not exist: {0}", assemblyLocation);
+                if (ex.MustBeRethrown())
+                {
+                    throw;
+                }
+                return ArrayHelper.Empty<string>();
+            }
+            catch (System.Security.SecurityException ex)
+            {
+                InternalLogger.Warn(ex, "Skipping auto loading location because access not allowed to assembly directory: {0}", assemblyLocation);
+                if (ex.MustBeRethrown())
+                {
+                    throw;
+                }
+                return ArrayHelper.Empty<string>();
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                InternalLogger.Warn(ex, "Skipping auto loading location because access not allowed to assembly directory: {0}", assemblyLocation);
+                if (ex.MustBeRethrown())
+                {
+                    throw;
+                }
+                return ArrayHelper.Empty<string>();
+            }
+        }
+#endif
 
         /// <summary>
         /// Registers items in NLog.Extended.dll using late-bound types, so that we don't need a reference to NLog.Extended.dll.

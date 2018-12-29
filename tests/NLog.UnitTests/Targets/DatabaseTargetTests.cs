@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -339,6 +339,45 @@ ExecuteNonQuery: INSERT INTO FooBar VALUES('msg3')
             MockDbConnection.ClearLog();
             dt.Close();
             expectedLog = @"Close()
+Dispose()
+";
+
+            AssertLog(expectedLog);
+        }
+
+        [Fact]
+        public void InstallParameterTest()
+        {
+            MockDbConnection.ClearLog();
+
+            DatabaseCommandInfo installDbCommand = new DatabaseCommandInfo
+            {
+                Text = $"INSERT INTO dbo.SomeTable(SomeColumn) SELECT @paramOne WHERE NOT EXISTS(SELECT 1 FROM dbo.SomeOtherTable WHERE SomeColumn = @paramOne);"
+            };
+            installDbCommand.Parameters.Add(new DatabaseParameterInfo("paramOne", "SomeValue"));
+
+            DatabaseTarget dt = new DatabaseTarget()
+            {
+                DBProvider = typeof(MockDbConnection).AssemblyQualifiedName,
+                KeepConnection = true,
+                CommandText = "not_important"
+            };
+            dt.InstallDdlCommands.Add(installDbCommand);
+
+            dt.Initialize(null);
+
+            Assert.Same(typeof(MockDbConnection), dt.ConnectionType);
+
+            dt.Install(new InstallationContext());
+
+            string expectedLog = @"Open('Server=.;Trusted_Connection=SSPI;').
+CreateParameter(0)
+Parameter #0 Direction=Input
+Parameter #0 Name=paramOne
+Parameter #0 Value=SomeValue
+Add Parameter Parameter #0
+ExecuteNonQuery: INSERT INTO dbo.SomeTable(SomeColumn) SELECT @paramOne WHERE NOT EXISTS(SELECT 1 FROM dbo.SomeOtherTable WHERE SomeColumn = @paramOne);
+Close()
 Dispose()
 ";
 
@@ -849,11 +888,7 @@ Dispose()
         }
 #endif
 
-#if NETSTANDARD
-        [Fact(Skip = "NETSTANDARD missing fully working Sqlite")]
-#else
         [Fact]
-#endif
         public void SQLite_InstallAndLogMessageProgrammatically()
         {
             SQLiteTest sqlLite = new SQLiteTest("TestLogProgram.sqlite");
@@ -929,11 +964,7 @@ Dispose()
 #endif
         }
 
-#if NETSTANDARD
-        [Fact(Skip = "NETSTANDARD missing fully working Sqlite")]
-#else
         [Fact]
-#endif
         public void SQLite_InstallAndLogMessage()
         {
             SQLiteTest sqlLite = new SQLiteTest("TestLogXml.sqlite");
@@ -994,6 +1025,117 @@ Dispose()
             }
         }
 
+        [Fact]
+        public void SQLite_InstallTest()
+        {
+            SQLiteTest sqlLite = new SQLiteTest("TestInstallXml.sqlite");
+
+            // delete database just in case
+            sqlLite.TryDropDatabase();
+            LogManager.ThrowExceptions = true;
+
+            try
+            {
+                sqlLite.CreateDatabase();
+
+                var connectionString = sqlLite.GetConnectionString();
+                string dbProvider = GetSQLiteDbProvider();
+
+                // Create log with xml config
+                LogManager.Configuration = CreateConfigurationFromString(@"
+            <nlog xmlns='http://www.nlog-project.org/schemas/NLog.xsd'
+                  xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' throwExceptions='true'>
+                <targets>
+                    <target name='database' xsi:type='Database' dbProvider=""" + dbProvider + @""" connectionstring=""" + connectionString + @"""
+                        commandText='not_important'>
+<install-command ignoreFailures=""false""
+                 text=""CREATE TABLE NLogSqlLiteTestAppNames (
+    Id int PRIMARY KEY,
+    Name varchar(100) NULL
+);
+INSERT INTO NLogSqlLiteTestAppNames(Id, Name) VALUES (1, @appName);"">
+<parameter name='@appName' layout='MyApp' />
+</install-command>
+
+                    </target>
+                </targets>
+                <rules>
+                    <logger name='*' writeTo='database' />
+                </rules>
+            </nlog>");
+
+                //install 
+                InstallationContext context = new InstallationContext();
+                LogManager.Configuration.Install(context);
+
+                // check so table is created
+                var tableName = sqlLite.IssueScalarQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'NLogSqlLiteTestAppNames'");
+                Assert.Equal("NLogSqlLiteTestAppNames", tableName);
+
+                // returns long
+                var logcount = sqlLite.IssueScalarQuery("SELECT count(*) FROM NLogSqlLiteTestAppNames");
+                Assert.Equal((long)1, logcount);
+
+                // check if entry was correct
+                var entryValue = sqlLite.IssueScalarQuery("SELECT Name FROM NLogSqlLiteTestAppNames WHERE ID = 1");
+                Assert.Equal("MyApp", entryValue);
+            }
+            finally
+            {
+                sqlLite.TryDropDatabase();
+            }
+        }
+
+        [Fact]
+        public void SQLite_InstallProgramaticallyTest()
+        {
+            SQLiteTest sqlLite = new SQLiteTest("TestInstallProgram.sqlite");
+
+            // delete database just in case
+            sqlLite.TryDropDatabase();
+            LogManager.ThrowExceptions = true;
+
+            try
+            {
+                sqlLite.CreateDatabase();
+
+                var connectionString = sqlLite.GetConnectionString();
+                string dbProvider = GetSQLiteDbProvider();
+
+                DatabaseTarget testTarget = new DatabaseTarget("TestSqliteTargetInstallProgram");
+                testTarget.ConnectionString = connectionString;
+                testTarget.DBProvider = dbProvider;
+                
+                DatabaseCommandInfo installDbCommand = new DatabaseCommandInfo
+                {
+                    Text = "CREATE TABLE NLogSqlLiteTestAppNames (Id int PRIMARY KEY, Name varchar(100) NULL); " +
+                        "INSERT INTO NLogSqlLiteTestAppNames(Id, Name) SELECT 1, @paramOne WHERE NOT EXISTS(SELECT 1 FROM NLogSqlLiteTestAppNames WHERE Name = @paramOne);"
+                };
+                installDbCommand.Parameters.Add(new DatabaseParameterInfo("@paramOne", "MyApp"));
+                testTarget.InstallDdlCommands.Add(installDbCommand);
+
+                //install 
+                InstallationContext context = new InstallationContext();
+                testTarget.Install(context);
+
+                // check so table is created
+                var tableName = sqlLite.IssueScalarQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'NLogSqlLiteTestAppNames'");
+                Assert.Equal("NLogSqlLiteTestAppNames", tableName);
+
+                // returns long
+                var logcount = sqlLite.IssueScalarQuery("SELECT count(*) FROM NLogSqlLiteTestAppNames");
+                Assert.Equal((long)1, logcount);
+
+                // check if entry was correct
+                var entryValue = sqlLite.IssueScalarQuery("SELECT Name FROM NLogSqlLiteTestAppNames WHERE ID = 1");
+                Assert.Equal("MyApp", entryValue);
+            }
+            finally
+            {
+                sqlLite.TryDropDatabase();
+            }
+        }
+
         private void SetupSqliteConfigWithInvalidInstallCommand(string databaseName)
         {
             var nlogXmlConfig = @"
@@ -1013,7 +1155,12 @@ Dispose()
 
             // Use an in memory SQLite database
             // See https://www.sqlite.org/inmemorydb.html
+#if NETSTANDARD
+            var connectionString = "Data Source=:memory:";
+#else
             var connectionString = "Uri=file::memory:;Version=3";
+#endif
+
 
             LogManager.Configuration = CreateConfigurationFromString(
                 String.Format(nlogXmlConfig, GetSQLiteDbProvider(), connectionString)
@@ -1035,11 +1182,8 @@ Dispose()
             Assert.Null(exRecorded);
         }
 
-#if NETSTANDARD
-        [Fact(Skip = "NETSTANDARD missing fully working Sqlite")]
-#else
+
         [Fact]
-#endif
         public void RethrowingInstallExceptions()
         {
             SetupSqliteConfigWithInvalidInstallCommand("rethrowing_install_exceptions");
@@ -1227,6 +1371,30 @@ Dispose()
             databaseTarget.Initialize(null);
             Assert.NotNull(databaseTarget.ProviderFactory);
             Assert.Equal(typeof(SqlClientFactory), databaseTarget.ProviderFactory.GetType());
+        }
+
+        [Fact]
+        public void GetProviderNameFromConnectionString()
+        {
+            LogManager.ThrowExceptions = true;
+            var databaseTarget = new DatabaseTarget()
+            {
+                Name = "myTarget",
+                ConnectionStringName = "test_connectionstring_with_providerName",
+                CommandText = "notimportant",
+            };
+
+            databaseTarget.ConnectionStringsSettings = new ConnectionStringSettingsCollection()
+            {
+                new ConnectionStringSettings("test_connectionstring_with_providerName",
+                    "metadata=res://*/Model.csdl|res://*/Model.ssdl|res://*/Model.msl;provider=System.Data.SqlClient;provider connection string=\"data source=192.168.0.100;initial catalog=TEST_DB;user id=myUser;password=SecretPassword;multipleactiveresultsets=True;application name=EntityFramework\"",
+                    "System.Data.EntityClient"),
+            };
+
+            databaseTarget.Initialize(null);
+            Assert.NotNull(databaseTarget.ProviderFactory);
+            Assert.Equal(typeof(SqlClientFactory), databaseTarget.ProviderFactory.GetType());
+            Assert.Equal("data source=192.168.0.100;initial catalog=TEST_DB;user id=myUser;password=SecretPassword;multipleactiveresultsets=True;application name=EntityFramework", ((NLog.Layouts.SimpleLayout)databaseTarget.ConnectionString).FixedText);
         }
 #endif
 
@@ -1683,7 +1851,11 @@ Dispose()
             public SQLiteTest(string dbName)
             {
                 this.dbName = dbName;
+#if NETSTANDARD
+                connectionString = "Data Source=" + this.dbName;
+#else
                 connectionString = "Data Source=" + this.dbName + ";Version=3;";
+#endif
             }
 
             public string GetConnectionString()

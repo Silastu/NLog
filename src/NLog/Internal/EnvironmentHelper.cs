@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -51,6 +51,27 @@ namespace NLog.Internal
                 string newline = "\r\n";
 #endif
                 return newline;
+            }
+        }
+
+        internal static string GetMachineName()
+        {
+            try
+            {
+#if SILVERLIGHT
+                return "SilverLight";
+#elif NETSTANDARD1_3
+                var machineName = EnvironmentHelper.GetSafeEnvironmentVariable("COMPUTERNAME") ?? string.Empty;
+                if (string.IsNullOrEmpty(machineName))
+                    machineName = EnvironmentHelper.GetSafeEnvironmentVariable("HOSTNAME") ?? string.Empty;
+                return machineName;
+#else
+                return Environment.MachineName;
+#endif
+            }
+            catch (System.Security.SecurityException)
+            {
+                return string.Empty;
             }
         }
 

@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -45,11 +45,13 @@ namespace NLog.LayoutRenderers
     /// </summary>
     [LayoutRenderer("callsite-linenumber")]
     [ThreadAgnostic]
+    [ThreadSafe]
     public class CallSiteLineNumberLayoutRenderer : LayoutRenderer, IUsesStackTrace
     {
         /// <summary>
         /// Gets or sets the number of frames to skip.
         /// </summary>
+        /// <docgen category='Rendering Options' order='10' />
         [DefaultValue(0)]
         public int SkipFrames { get; set; }
         
@@ -68,7 +70,7 @@ namespace NLog.LayoutRenderers
             if (logEvent.CallSiteInformation != null)
             {
                 int linenumber = logEvent.CallSiteInformation.GetCallerLineNumber(SkipFrames);
-                builder.Append(linenumber);
+                builder.AppendInvariant(linenumber);
             }
         }
     }

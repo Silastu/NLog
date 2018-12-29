@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -46,6 +46,8 @@ namespace NLog.LayoutRenderers
     /// </summary>
     [LayoutRenderer("all-event-properties")]
     [ThreadAgnostic]
+    [ThreadSafe]
+    [MutableUnsafe]
     public class AllEventPropertiesLayoutRenderer : LayoutRenderer
     {
         private string _format;
@@ -76,6 +78,7 @@ namespace NLog.LayoutRenderers
         /// 
         /// See https://msdn.microsoft.com/en-us/library/hh534540.aspx
         /// </summary>
+        /// <docgen category='Rendering Options' order='10' />
         [DefaultValue(false)]
         public bool IncludeCallerInformation { get; set; }
 
@@ -178,10 +181,11 @@ namespace NLog.LayoutRenderers
 
         private IDictionary<object, object> GetProperties(LogEventInfo logEvent)
         {
+            var properties = logEvent.Properties;
 #if NET4_5
             if (IncludeCallerInformation)
             {
-                return logEvent.Properties;
+                return properties;
             }
 
             if (logEvent.CallSiteInformation != null)
@@ -189,16 +193,16 @@ namespace NLog.LayoutRenderers
                 // TODO NLog ver. 5 - Remove these properties. Instead output artificial properties, extracted from LogEventInfo.CallSiteInformation
                 foreach (string propertyName in CallerInformationAttributeNames)
                 {
-                    if (logEvent.Properties.ContainsKey(propertyName))
+                    if (properties.ContainsKey(propertyName))
                     {
-                        return logEvent.Properties.Where(p => !CallerInformationAttributeNames.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value);
+                        return properties.Where(p => !CallerInformationAttributeNames.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value);
                     }
                 }
             }
 
-            return logEvent.Properties;
+            return properties;
 #else
-            return logEvent.Properties;
+            return properties;
 #endif
         }
     }

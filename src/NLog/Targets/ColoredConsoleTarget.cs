@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -33,7 +33,7 @@
 
 using NLog.Common;
 
-#if !SILVERLIGHT && !__IOS__ && !__ANDROID__
+#if !SILVERLIGHT && !__IOS__ && !__ANDROID__ && !NETSTANDARD1_3
 
 namespace NLog.Targets
 {
@@ -42,7 +42,7 @@ namespace NLog.Targets
     using System.Collections.Generic;
     using System.ComponentModel;
     using System.IO;
-    using Config;
+    using NLog.Config;
 
     /// <summary>
     /// Writes log messages to the console with customizable coloring.
@@ -55,16 +55,16 @@ namespace NLog.Targets
         /// Should logging being paused/stopped because of the race condition bug in Console.Writeline?
         /// </summary>
         /// <remarks>
-        ///   Console.Out.Writeline / Console.Error.Writeline could throw 'IndexOutOfRangeException', which is a bug. 
+        ///   Console.Out.Writeline / Console.Error.Writeline could throw 'IndexOutOfRangeException', which is a bug.
         /// See http://stackoverflow.com/questions/33915790/console-out-and-console-error-race-condition-error-in-a-windows-service-written
         /// and https://connect.microsoft.com/VisualStudio/feedback/details/2057284/console-out-probable-i-o-race-condition-issue-in-multi-threaded-windows-service
-        ///             
-        /// Full error: 
+        ///
+        /// Full error:
         ///   Error during session close: System.IndexOutOfRangeException: Probable I/ O race condition detected while copying memory.
-        ///   The I/ O package is not thread safe by default.In multithreaded applications, 
-        ///   a stream must be accessed in a thread-safe way, such as a thread - safe wrapper returned by TextReader's or 
+        ///   The I/ O package is not thread safe by default.In multithreaded applications,
+        ///   a stream must be accessed in a thread-safe way, such as a thread - safe wrapper returned by TextReader's or
         ///   TextWriter's Synchronized methods.This also applies to classes like StreamWriter and StreamReader.
-        /// 
+        ///
         /// </remarks>
         private bool _pauseLogging;
 
@@ -109,7 +109,7 @@ namespace NLog.Targets
         /// <summary>
         /// Gets or sets a value indicating whether the error stream (stderr) should be used instead of the output stream (stdout).
         /// </summary>
-        /// <docgen category='Output Options' order='10' />
+        /// <docgen category='Console Options' order='10' />
         [DefaultValue(false)]
         public bool ErrorStream { get; set; }
 
@@ -165,6 +165,7 @@ namespace NLog.Targets
         /// The encoding for writing messages to the <see cref="Console"/>.
         ///  </summary>
         /// <remarks>Has side effect</remarks>
+        /// <docgen category='Console Options' order='10' />
         public Encoding Encoding
         {
             get => ConsoleTargetHelper.GetConsoleOutputEncoding(_encoding, IsInitialized, _pauseLogging);
@@ -182,6 +183,7 @@ namespace NLog.Targets
         ///  - Disables console writing if Environment.UserInteractive = False (Windows Service)
         ///  - Disables console writing if Console Standard Input is not available (Non-Console-App)
         /// </summary>
+        /// <docgen category='Console Options' order='10' />
         [DefaultValue(false)]
         public bool DetectConsoleAvailable { get; set; }
 
@@ -297,14 +299,14 @@ namespace NLog.Targets
                 }
                 catch (IndexOutOfRangeException ex)
                 {
-                    //this is a bug and therefor stopping logging. For docs, see PauseLogging property
+                    // This is a bug and will therefore stop the logging. For docs, see the PauseLogging property.
                     _pauseLogging = true;
                     InternalLogger.Warn(ex, "An IndexOutOfRangeException has been thrown and this is probably due to a race condition." +
                                             "Logging to the console will be paused. Enable by reloading the config or re-initialize the targets");
                 }
                 catch (ArgumentOutOfRangeException ex)
                 {
-                    //this is a bug and therefor stopping logging. For docs, see PauseLogging property
+                    // This is a bug and will therefore stop the logging. For docs, see the PauseLogging property.
                     _pauseLogging = true;
                     InternalLogger.Warn(ex, "An ArgumentOutOfRangeException has been thrown and this is probably due to a race condition." +
                                             "Logging to the console will be paused. Enable by reloading the config or re-initialize the targets");

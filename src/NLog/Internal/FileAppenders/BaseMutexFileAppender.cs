@@ -1,5 +1,5 @@
 ﻿// 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -31,7 +31,7 @@
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-#if !SILVERLIGHT && !__ANDROID__ && !__IOS__
+#if !SILVERLIGHT && !__ANDROID__ && !__IOS__ && !NETSTANDARD1_3
 // Unfortunately, Xamarin Android and Xamarin iOS don't support mutexes (see https://github.com/mono/mono/blob/3a9e18e5405b5772be88bfc45739d6a350560111/mcs/class/corlib/System.Threading/Mutex.cs#L167) 
 #define SupportsMutex
 #endif
@@ -45,7 +45,7 @@ namespace NLog.Internal.FileAppenders
     using System.Text;
 
 #if SupportsMutex
-#if !NETSTANDARD1_5
+#if !NETSTANDARD
     using System.Security.AccessControl;
     using System.Security.Principal;
 #endif
@@ -91,9 +91,17 @@ namespace NLog.Internal.FileAppenders
             {
                 return CreateSharableMutex("FileArchiveLock");
             }
-            catch (SecurityException ex)
+            catch (Exception ex)
             {
-                InternalLogger.Warn(ex, "Failed to create global archive mutex: {0}", FileName);
+                if (ex is SecurityException || ex is UnauthorizedAccessException || ex is NotSupportedException || ex is NotImplementedException || ex is PlatformNotSupportedException)
+                {
+                    InternalLogger.Warn(ex, "Failed to create global archive mutex: {0}", FileName);
+                    return new Mutex();
+                }
+
+                InternalLogger.Error(ex, "Failed to create global archive mutex: {0}", FileName);
+                if (ex.MustBeRethrown())
+                    throw;
                 return new Mutex();
             }
         }
@@ -131,8 +139,7 @@ namespace NLog.Internal.FileAppenders
 
             // The constructor will either create new mutex or open
             // an existing one, in a thread-safe manner
-            bool createdNew;
-            return new Mutex(false, name, out createdNew, mutexSecurity);
+            return new Mutex(false, name, out _, mutexSecurity);
 #else
             //Mutex with 4 args has keyword "unsafe"
             return new Mutex(false, name);

@@ -1,5 +1,5 @@
 ﻿// 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -55,11 +55,13 @@ namespace NLog.Internal
         /// <summary>
         /// Sets the details retrieved from the Caller Information Attributes
         /// </summary>
+        /// <param name="callerClassName"></param>
         /// <param name="callerMemberName"></param>
         /// <param name="callerFilePath"></param>
         /// <param name="callerLineNumber"></param>
-        public void SetCallerInfo(string callerMemberName, string callerFilePath, int callerLineNumber)
+        public void SetCallerInfo(string callerClassName, string callerMemberName, string callerFilePath, int callerLineNumber)
         {
+            CallerClassName = callerClassName;
             CallerMemberName = callerMemberName;
             CallerFilePath = callerFilePath;
             CallerLineNumber = callerLineNumber;
@@ -68,7 +70,7 @@ namespace NLog.Internal
         /// <summary>
         /// Gets the stack frame of the method that did the logging.
         /// </summary>
-        public StackFrame UserStackFrame => (StackTrace != null) ? StackTrace.GetFrame(UserStackFrameNumberLegacy ?? UserStackFrameNumber) : null;
+        public StackFrame UserStackFrame => StackTrace?.GetFrame(UserStackFrameNumberLegacy ?? UserStackFrameNumber);
 
         /// <summary>
         /// Gets the number index of the stack frame that represents the user
@@ -94,6 +96,22 @@ namespace NLog.Internal
 
         public string GetCallerClassName(MethodBase method, bool includeNameSpace, bool cleanAsyncMoveNext, bool cleanAnonymousDelegates)
         {
+            if (!string.IsNullOrEmpty(CallerClassName))
+            {
+                if (includeNameSpace)
+                {
+                    return CallerClassName;
+                }
+                else
+                {
+                    int lastDot = CallerClassName.LastIndexOf('.');
+                    if (lastDot < 0 || lastDot >= CallerClassName.Length - 1)
+                        return CallerClassName;
+                    else
+                        return CallerClassName.Substring(lastDot + 1);
+                }
+            }
+
             method = method ?? GetCallerStackFrameMethod(0);
             if (method == null)
                 return string.Empty;
@@ -139,6 +157,7 @@ namespace NLog.Internal
             return frame?.GetFileLineNumber() ?? 0;
         }
 
+        public string CallerClassName { get; private set; }
         public string CallerMemberName { get; private set; }
         public string CallerFilePath { get; private set; }
         public int? CallerLineNumber { get; private set; }

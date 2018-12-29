@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -31,13 +31,13 @@
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-using NLog.Layouts;
-
 namespace NLog.LayoutRenderers.Wrappers
 {
+    using System;
     using System.Text;
-    using Conditions;
-    using Config;
+    using NLog.Conditions;
+    using NLog.Config;
+    using NLog.Layouts;
 
     /// <summary>
     /// Only outputs the inner layout when the specified condition has been met.
@@ -45,6 +45,7 @@ namespace NLog.LayoutRenderers.Wrappers
     [LayoutRenderer("when")]
     [AmbientProperty("When")]
     [ThreadAgnostic]
+    [ThreadSafe]
     public sealed class WhenLayoutRendererWrapper : WrapperLayoutRendererBuilderBase
     {
         /// <summary>
@@ -52,38 +53,30 @@ namespace NLog.LayoutRenderers.Wrappers
         /// </summary>
         /// <docgen category="Transformation Options" order="10"/>
         [RequiredParameter]
-
         public ConditionExpression When { get; set; }
-
 
         /// <summary>
         /// If <see cref="When"/> is not met, print this layout.
         /// </summary>
+        /// <docgen category="Transformation Options" order="10"/>
         public Layout Else { get; set; }
 
-        /// <summary>
-        /// Transforms the output of another layout.
-        /// </summary>
-        /// <param name="target">Output to be transform.</param>
-        protected override void TransformFormattedMesssage(StringBuilder target)
-        {
-        }
-
-        /// <summary>
-        /// Renders the inner layout contents.
-        /// </summary>
-        /// <param name="logEvent">The log event.</param>
-        /// <param name="target"><see cref="StringBuilder"/> for the result</param>
-        protected override void RenderFormattedMessage(LogEventInfo logEvent, StringBuilder target)
+        /// <inheritdoc/>
+        protected override void RenderInnerAndTransform(LogEventInfo logEvent, StringBuilder builder, int orgLength)
         {
             if (When == null || true.Equals(When.Evaluate(logEvent)))
             {
-                base.RenderFormattedMessage(logEvent, target);
+                Inner.RenderAppendBuilder(logEvent, builder);
             }
             else if (Else != null)
             {
-                Else.RenderAppendBuilder(logEvent, target);
+                Else.RenderAppendBuilder(logEvent, builder);
             }
+        }
+
+        /// <inheritdoc/>
+        protected override void TransformFormattedMesssage(StringBuilder target)
+        {
         }
     }
 }

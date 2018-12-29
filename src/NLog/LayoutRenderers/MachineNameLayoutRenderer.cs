@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -37,9 +37,9 @@ namespace NLog.LayoutRenderers
 {
     using System;
     using System.Text;
-    using Common;
-    using Config;
-    using Internal;
+    using NLog.Common;
+    using NLog.Config;
+    using NLog.Internal;
 
     /// <summary>
     /// The machine name that the process is running on.
@@ -47,6 +47,7 @@ namespace NLog.LayoutRenderers
     [LayoutRenderer("machinename")]
     [AppDomainFixedOutput]
     [ThreadAgnostic]
+    [ThreadSafe]
     public class MachineNameLayoutRenderer : LayoutRenderer
     {
         internal string MachineName { get; private set; }
@@ -59,12 +60,15 @@ namespace NLog.LayoutRenderers
             base.InitializeLayoutRenderer();
             try
             {
-                MachineName = Environment.MachineName;
+                MachineName = EnvironmentHelper.GetMachineName();
+                if (string.IsNullOrEmpty(MachineName))
+                {
+                    InternalLogger.Info("MachineName is not available.");
+                }
             }
             catch (Exception exception)
             {
                 InternalLogger.Error(exception, "Error getting machine name.");
-
                 if (exception.MustBeRethrown())
                 {
                     throw;

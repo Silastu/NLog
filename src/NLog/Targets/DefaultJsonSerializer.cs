@@ -1,5 +1,5 @@
 ﻿// 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -35,8 +35,10 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Reflection;
 using System.Text;
+using NLog.Common;
 using NLog.Internal;
 
 namespace NLog.Targets
@@ -51,12 +53,14 @@ namespace NLog.Targets
         private readonly MruCache<Type, KeyValuePair<PropertyInfo[], ReflectionHelpers.LateBoundMethod[]>> _propsCache = new MruCache<Type, KeyValuePair<PropertyInfo[], ReflectionHelpers.LateBoundMethod[]>>(10000);
         private readonly MruCache<Enum, string> _enumCache = new MruCache<Enum, string>(1500);
         private readonly JsonSerializeOptions _serializeOptions = new JsonSerializeOptions();
+        private readonly JsonSerializeOptions _exceptionSerializeOptions = new JsonSerializeOptions() { SanitizeDictionaryKeys = true };
         private readonly IFormatProvider _defaultFormatProvider = CreateFormatProvider();
 
-        private const int MaxRecursionDepth = 10;
         private const int MaxJsonLength = 512 * 1024;
 
         private static readonly DefaultJsonSerializer instance;
+
+        private static readonly IEqualityComparer<object> _referenceEqualsComparer = SingleItemOptimizedHashSet<object>.ReferenceEqualityComparer.Default;
 
         /// <summary>
         /// Singleton instance of the serializer.
@@ -68,12 +72,14 @@ namespace NLog.Targets
             instance = new DefaultJsonSerializer();
         }
 
+        /// <summary>
+        /// Private. Use <see cref="Instance"/>
+        /// </summary>
         private DefaultJsonSerializer()
         { }
 
         /// <summary>
-        /// Returns a serialization of an object
-        /// int JSON format.
+        /// Returns a serialization of an object into JSON format.
         /// </summary>
         /// <param name="value">The object to serialize to JSON.</param>
         /// <returns>Serialized value.</returns>
@@ -83,27 +89,36 @@ namespace NLog.Targets
         }
 
         /// <summary>
-        /// Returns a serialization of an object
-        /// int JSON format.
+        /// Returns a serialization of an object into JSON format.
         /// </summary>
         /// <param name="value">The object to serialize to JSON.</param>
-        /// <param name="options">Options</param>
+        /// <param name="options">serialisation options</param>
         /// <returns>Serialized value.</returns>
         public string SerializeObject(object value, JsonSerializeOptions options)
         {
-            string str;
             if (value == null)
             {
                 return "null";
             }
-            else if ((str = value as string) != null)
+            else if (value is string str)
             {
-                return QuoteValue(EscapeString(str, options.EscapeUnicode));
+                for (int i = 0; i < str.Length; ++i)
+                {
+                    if (RequiresJsonEscape(str[i], options.EscapeUnicode))
+                    {
+                        StringBuilder sb = new StringBuilder(str.Length + 4);
+                        sb.Append('"');
+                        AppendStringEscape(sb, str, options.EscapeUnicode);
+                        sb.Append('"');
+                        return sb.ToString();
+                    }
+                }
+                return QuoteValue(str);
             }
             else
             {
                 TypeCode objTypeCode = Convert.GetTypeCode(value);
-                if (objTypeCode != TypeCode.Object && StringHelpers.IsNullOrWhiteSpace(options.Format) && options.FormatProvider == null)
+                if (objTypeCode != TypeCode.Object && objTypeCode != TypeCode.Char && StringHelpers.IsNullOrWhiteSpace(options.Format) && options.FormatProvider == null)
                 {
                     Enum enumValue;
                     if (!options.EnumAsInteger && IsNumericTypeCode(objTypeCode, false) && (enumValue = value as Enum) != null)
@@ -112,14 +127,14 @@ namespace NLog.Targets
                     }
                     else
                     {
-                        str = XmlHelper.XmlConvertToString(value, objTypeCode);
-                        if (SkipQuotes(objTypeCode))
+                        string xmlStr = XmlHelper.XmlConvertToString(value, objTypeCode);
+                        if (SkipQuotes(value, objTypeCode))
                         {
-                            return str;
+                            return xmlStr;
                         }
                         else
                         {
-                            return QuoteValue(str);
+                            return QuoteValue(xmlStr);
                         }
                     }
                 }
@@ -136,40 +151,37 @@ namespace NLog.Targets
         }
 
         /// <summary>
-        /// 
+        /// Serialization of the object in JSON format to the destination StringBuilder
         /// </summary>
-        /// <param name="value"></param>
-        /// <param name="destination"></param>
-        /// <returns></returns>
+        /// <param name="value">The object to serialize to JSON.</param>
+        /// <param name="destination">Write the resulting JSON to this destination.</param>
+        /// <returns>Object serialized succesfully (true/false).</returns>
         public bool SerializeObject(object value, StringBuilder destination)
         {
             return SerializeObject(value, destination, _serializeOptions);
         }
 
         /// <summary>
-        /// 
+        /// Serialization of the object in JSON format to the destination StringBuilder
         /// </summary>
-        /// <param name="value"></param>
-        /// <param name="destination"></param>
-        /// <param name="options"></param>
-        /// <returns></returns>
+        /// <param name="value">The object to serialize to JSON.</param>
+        /// <param name="destination">Write the resulting JSON to this destination.</param>
+        /// <param name="options">serialisation options</param>
+        /// <returns>Object serialized succesfully (true/false).</returns>
         public bool SerializeObject(object value, StringBuilder destination, JsonSerializeOptions options)
         {
             return SerializeObject(value, destination, options, default(SingleItemOptimizedHashSet<object>), 0);
         }
 
         /// <summary>
-        /// Returns a serialization of an object
-        /// int JSON format.
+        /// Serialization of the object in JSON format to the destination StringBuilder
         /// </summary>
         /// <param name="value">The object to serialize to JSON.</param>
-        /// <param name="destination">The object to serialize to JSON.</param>
+        /// <param name="destination">Write the resulting JSON to this destination.</param>
         /// <param name="options">serialisation options</param>
-        /// <param name="objectsInPath">The objects in path.</param>
+        /// <param name="objectsInPath">The objects in path (Avoid cyclic reference loop).</param>
         /// <param name="depth">The current depth (level) of recursion.</param>
-        /// <returns>
-        /// Serialized value.
-        /// </returns>
+        /// <returns>Object serialized succesfully (true/false).</returns>
         private bool SerializeObject(object value, StringBuilder destination, JsonSerializeOptions options,
                 SingleItemOptimizedHashSet<object> objectsInPath, int depth)
         {
@@ -177,43 +189,36 @@ namespace NLog.Targets
             {
                 return false; // detected reference loop, skip serialization
             }
-            if (depth > MaxRecursionDepth)
-            {
-                return false; // reached maximum recursion level, no further serialization
-            }
-
-            IEnumerable enumerable;
-            IDictionary dict;
-            string str;
 
             if (value == null)
             {
                 destination.Append("null");
             }
-            else if ((str = value as string) != null)
+            else if (value is string str)
             {
-                QuoteValue(destination, EscapeString(str, options.EscapeUnicode));
+                destination.Append('"');
+                AppendStringEscape(destination, str, options.EscapeUnicode);
+                destination.Append('"');
             }
-            else if ((dict = value as IDictionary) != null)
+            else if (value is IDictionary dict)
             {
-                using (new SingleItemOptimizedHashSet<object>.SingleItemScopedInsert(dict, ref objectsInPath, true))
+                using (StartScope(ref objectsInPath, dict))
                 {
                     SerializeDictionaryObject(dict, destination, options, objectsInPath, depth);
                 }
             }
-            else if ((enumerable = value as IEnumerable) != null)
+            else if (value is IEnumerable enumerable)
             {
-                using (new SingleItemOptimizedHashSet<object>.SingleItemScopedInsert(value, ref objectsInPath, true))
+                using (StartScope(ref objectsInPath, value))
                 {
                     SerializeCollectionObject(enumerable, destination, options, objectsInPath, depth);
                 }
             }
             else
             {
-                IFormattable formattable;
                 var format = options.Format;
                 var hasFormat = !StringHelpers.IsNullOrWhiteSpace(format);
-                if ((options.FormatProvider != null || hasFormat) && (formattable = value as IFormattable) != null)
+                if ((options.FormatProvider != null || hasFormat) && (value is IFormattable formattable))
                 {
                     if (!SerializeWithFormatProvider(value, destination, options, formattable, format, hasFormat))
                     {
@@ -232,6 +237,11 @@ namespace NLog.Targets
             return true;
         }
 
+        private static SingleItemOptimizedHashSet<object>.SingleItemScopedInsert StartScope(ref SingleItemOptimizedHashSet<object> objectsInPath, object value)
+        {
+            return new SingleItemOptimizedHashSet<object>.SingleItemScopedInsert(value, ref objectsInPath, true, _referenceEqualsComparer);
+        }
+
         private bool SerializeWithFormatProvider(object value, StringBuilder destination, JsonSerializeOptions options, IFormattable formattable, string format, bool hasFormat)
         {
             int originalLength = destination.Length;
@@ -239,7 +249,7 @@ namespace NLog.Targets
             try
             {
                 TypeCode objTypeCode = Convert.GetTypeCode(value);
-                bool includeQuotes = !SkipQuotes(objTypeCode);
+                bool includeQuotes = !SkipQuotes(value, objTypeCode);
                 if (includeQuotes)
                 {
                     destination.Append('"');
@@ -253,7 +263,8 @@ namespace NLog.Targets
                 else
                 {
                     //format provider passed without FormatProvider
-                    destination.Append(EscapeString(formattable.ToString("", options.FormatProvider), options.EscapeUnicode));
+                    var str = formattable.ToString("", options.FormatProvider);
+                    AppendStringEscape(destination, str, options.EscapeUnicode);
                 }
 
                 if (includeQuotes)
@@ -274,6 +285,13 @@ namespace NLog.Targets
         {
             bool first = true;
 
+            int nextDepth = objectsInPath.Count <= 1 ? depth : (depth + 1);
+            if (nextDepth > options.MaxRecursionLimit)
+            {
+                destination.Append("{}");
+                return;
+            }
+
             int originalLength;
             destination.Append('{');
             foreach (DictionaryEntry de in value)
@@ -289,30 +307,80 @@ namespace NLog.Targets
                     destination.Append(',');
                 }
 
+                if (options.QuoteKeys)
+                {
+                    var typeCode = Convert.GetTypeCode(de.Key);
+                    if (!SerializeObjectAsString(de.Key, typeCode, destination, options))
+                    {
+                        destination.Length = originalLength;
+                        continue;
+                    }
+                }
+                else
+                {
+                    if (!SerializeObject(de.Key, destination, options, objectsInPath, nextDepth))
+                    {
+                        destination.Length = originalLength;
+                        continue;
+                    }
+                }
+
+                if (options.SanitizeDictionaryKeys)
+                {
+                    int quoteSkipCount = options.QuoteKeys ? 1 : 0;
+                    int keyEndIndex = destination.Length - quoteSkipCount;
+                    int keyStartIndex = originalLength + (first ? 0 : 1) + quoteSkipCount;
+                    if (!SanitizeDictionaryKey(destination, keyStartIndex, keyEndIndex - keyStartIndex))
+                    {
+                        destination.Length = originalLength;    // Empty keys are not allowed
+                        continue;
+                    }
+                }
+
+                destination.Append(':');
+
                 //only serialize, if key and value are serialized without error (e.g. due to reference loop)
-                if (!SerializeObject(de.Key, destination, options, objectsInPath, depth + 1))
+                if (!SerializeObject(de.Value, destination, options, objectsInPath, nextDepth))
                 {
                     destination.Length = originalLength;
                 }
                 else
                 {
-                    destination.Append(':');
-                    if (!SerializeObject(de.Value, destination, options, objectsInPath, depth + 1))
-                    {
-                        destination.Length = originalLength;
-                    }
-                    else
-                    {
-                        first = false;
-                    }
+                    first = false;
                 }
             }
             destination.Append('}');
         }
 
+        private static bool SanitizeDictionaryKey(StringBuilder destination, int keyStartIndex, int keyLength)
+        {
+            if (keyLength == 0)
+            {
+                return false;   // Empty keys are not allowed
+            }
+
+            int keyEndIndex = keyStartIndex + keyLength;
+            for (int i = keyStartIndex; i < keyEndIndex; ++i)
+            {
+                char keyChar = destination[i];
+                if (keyChar == '_' || char.IsLetterOrDigit(keyChar))
+                    continue;
+
+                destination[i] = '_';
+            }
+            return true;
+        }
+
         private void SerializeCollectionObject(IEnumerable value, StringBuilder destination, JsonSerializeOptions options, SingleItemOptimizedHashSet<object> objectsInPath, int depth)
         {
             bool first = true;
+
+            int nextDepth = objectsInPath.Count <= 1 ? depth : (depth + 1); // Allow serialization of list-items 
+            if (nextDepth > options.MaxRecursionLimit)
+            {
+                destination.Append("[]");
+                return;
+            }
 
             int originalLength;
             destination.Append('[');
@@ -329,7 +397,7 @@ namespace NLog.Targets
                     destination.Append(',');
                 }
 
-                if (!SerializeObject(val, destination, options, objectsInPath, depth + 1))
+                if (!SerializeObject(val, destination, options, objectsInPath, nextDepth))
                 {
                     destination.Length = originalLength;
                 }
@@ -350,72 +418,106 @@ namespace NLog.Targets
                 {
                     //object without property, to string
                     QuoteValue(destination, Convert.ToString(value, CultureInfo.InvariantCulture));
+                    return true;
                 }
                 else if (value is DateTimeOffset)
                 {
                     QuoteValue(destination, $"{value:yyyy-MM-dd HH:mm:ss zzz}");
+                    return true;
                 }
                 else
                 {
-                    int originalLength = destination.Length;
-                    if (originalLength > MaxJsonLength)
-                    {
-                        return false;
-                    }
-
-                    try
-                    {
-                        using (new SingleItemOptimizedHashSet<object>.SingleItemScopedInsert(value, ref objectsInPath, false))
-                        {
-                            return SerializeProperties(value, destination, options, objectsInPath, depth);
-                        }
-                    }
-                    catch
-                    {
-                        //nothing to add, so return is OK
-                        destination.Length = originalLength;
-                        return false;
-                    }
+                    return SerializeObjectWithProperties(value, destination, options, ref objectsInPath, depth);
                 }
             }
             else
             {
-                if (IsNumericTypeCode(objTypeCode, false))
+                return SerializeSimpleTypeCodeValue(value, objTypeCode, destination, options);
+            }
+        }
+
+        private bool SerializeObjectWithProperties(object value, StringBuilder destination, JsonSerializeOptions options, ref SingleItemOptimizedHashSet<object> objectsInPath, int depth)
+        {
+            int originalLength = destination.Length;
+            if (originalLength > MaxJsonLength)
+            {
+                return false;
+            }
+
+            if (depth < options.MaxRecursionLimit)
+            {
+                try
                 {
-                    Enum enumValue;
-                    if (!options.EnumAsInteger && (enumValue = value as Enum) != null)
+                    if (value is Exception && ReferenceEquals(options, instance._serializeOptions))
                     {
-                        QuoteValue(destination, EnumAsString(enumValue));
+                        // Exceptions are seldom under control, and can include random Data-Dictionary-keys, so we sanitize by default
+                        options = instance._exceptionSerializeOptions;
                     }
-                    else
+
+                    using (new SingleItemOptimizedHashSet<object>.SingleItemScopedInsert(value, ref objectsInPath, false, _referenceEqualsComparer))
                     {
-                        AppendIntegerAsString(destination, value, objTypeCode);
+                        return SerializeProperties(value, destination, options, objectsInPath, depth);
                     }
+                }
+                catch
+                {
+                    //nothing to add, so return is OK
+                    destination.Length = originalLength;
+                    return false;
+                }
+            }
+            else
+            {
+                return SerializeObjectAsString(value, TypeCode.Object, destination, options);
+            }
+        }
+
+        private bool SerializeSimpleTypeCodeValue(object value, TypeCode objTypeCode, StringBuilder destination, JsonSerializeOptions options, bool forceQuotes = false)
+        {
+            if (objTypeCode == TypeCode.String || objTypeCode == TypeCode.Char)
+            {
+                destination.Append('"');
+                AppendStringEscape(destination, value.ToString(), options.EscapeUnicode);
+                destination.Append('"');
+            }
+            else if (IsNumericTypeCode(objTypeCode, false))
+            {
+                if (!options.EnumAsInteger && value is Enum enumValue)
+                {
+                    QuoteValue(destination, EnumAsString(enumValue));
                 }
                 else
                 {
-                    string str = XmlHelper.XmlConvertToString(value, objTypeCode);
-                    if (str == null)
-                    {
-                        return false;
-                    }
-                    if (SkipQuotes(objTypeCode))
-                    {
-                        destination.Append(str);
-                    }
-                    else
-                    {
-                        QuoteValue(destination, str);
-                    }
+                    if (forceQuotes)
+                        destination.Append('"');
+                    destination.AppendIntegerAsString(value, objTypeCode);
+                    if (forceQuotes)
+                        destination.Append('"');
                 }
             }
+            else
+            {
+                string str = XmlHelper.XmlConvertToString(value, objTypeCode);
+                if (str == null)
+                {
+                    return false;
+                }
 
+                if (!forceQuotes && SkipQuotes(value, objTypeCode))
+                {
+                    destination.Append(str);
+                }
+                else
+                {
+                    QuoteValue(destination, str);
+                }
+            }
             return true;
         }
 
         private static CultureInfo CreateFormatProvider()
         {
-#if SILVERLIGHT || NETSTANDARD1_5
+#if SILVERLIGHT || NETSTANDARD1_0
             var culture = new CultureInfo("en-US");
 #else
             var culture = new CultureInfo("en-US", false);
@@ -439,38 +541,6 @@ namespace NLog.Targets
             destination.Append('"');
         }
 
-        private static void AppendIntegerAsString(StringBuilder sb, object value, TypeCode objTypeCode)
-        {
-            switch (objTypeCode)
-            {
-                case TypeCode.Byte: sb.AppendInvariant((Byte)value); break;
-                case TypeCode.SByte: sb.AppendInvariant((SByte)value); break;
-                case TypeCode.Int16: sb.AppendInvariant((Int16)value); break;
-                case TypeCode.Int32: sb.AppendInvariant((Int32)value); break;
-                case TypeCode.Int64:
-                    {
-                        Int64 int64 = (Int64)value;
-                        if (int64 < Int32.MaxValue && int64 > Int32.MinValue)
-                            sb.AppendInvariant((Int32)int64);
-                        else
-                            sb.Append(int64);
-                    } break;
-                case TypeCode.UInt16: sb.AppendInvariant((UInt16)value); break;
-                case TypeCode.UInt32: sb.AppendInvariant((UInt32)value); break;
-                case TypeCode.UInt64:
-                    {
-                        UInt64 uint64 = (UInt64)value;
-                        if (uint64 < UInt32.MaxValue)
-                            sb.AppendInvariant((UInt32)uint64);
-                        else
-                            sb.Append(uint64);
-                    } break;
-                default:
-                    sb.Append(XmlHelper.XmlConvertToString(value, objTypeCode));
-                    break;
-            }
-        }
-
         private string EnumAsString(Enum value)
         {
             string textValue;
@@ -485,13 +555,29 @@ namespace NLog.Targets
         /// <summary>
         /// No quotes needed for this type?
         /// </summary>
-        /// <param name="objTypeCode"></param>
-        /// <returns></returns>
-        private static bool SkipQuotes(TypeCode objTypeCode)
+        private static bool SkipQuotes(object value, TypeCode objTypeCode)
         {
-            return objTypeCode != TypeCode.String && (objTypeCode == TypeCode.Empty  // Don't put quotes around null values
-                || objTypeCode == TypeCode.Boolean
-                || IsNumericTypeCode(objTypeCode, true));
+            switch (objTypeCode)
+            {
+                case TypeCode.String: return false;
+                case TypeCode.Char: return false;
+                case TypeCode.DateTime: return false;
+                case TypeCode.Empty: return true;
+                case TypeCode.Boolean: return true;
+                case TypeCode.Decimal: return true;
+                case TypeCode.Double:
+                    {
+                        double dblValue = (double)value;
+                        return !double.IsNaN(dblValue) && !double.IsInfinity(dblValue);
+                    }
+                case TypeCode.Single:
+                    {
+                        float floatValue = (float)value;
+                        return !float.IsNaN(floatValue) && !float.IsInfinity(floatValue);
+                    }
+                default:
+                    return IsNumericTypeCode(objTypeCode, false);
+            }
         }
 
         /// <summary>
@@ -524,26 +610,29 @@ namespace NLog.Targets
         /// <summary>
         /// Checks input string if it needs JSON escaping, and makes necessary conversion
         /// </summary>
+        /// <param name="destination">Destination Builder</param>
         /// <param name="text">Input string</param>
         /// <param name="escapeUnicode">Should non-ascii characters be encoded</param>
         /// <returns>JSON escaped string</returns>
-        internal static string EscapeString(string text, bool escapeUnicode)
+        internal static void AppendStringEscape(StringBuilder destination, string text, bool escapeUnicode)
         {
-            if (text == null)
-                return null;
+            if (string.IsNullOrEmpty(text))
+                return;
 
             StringBuilder sb = null;
+
             for (int i = 0; i < text.Length; ++i)
             {
                 char ch = text[i];
-                if (sb == null)
+                if (!RequiresJsonEscape(ch, escapeUnicode))
                 {
-                    // Check if we need to upgrade to StringBuilder
-                    if (!RequiresJsonEscape(ch, escapeUnicode))
-                        continue; // StringBuilder not needed, yet
-
-                    // StringBuilder needed
-                    sb = new StringBuilder(text.Length + 4);
+                    if (sb != null)
+                        sb.Append(ch);
+                    continue;
+                }
+                else if (sb == null)
+                {
+                    sb = destination;
                     sb.Append(text, 0, i);
                 }
 
@@ -594,10 +683,8 @@ namespace NLog.Targets
                 }
             }
 
-            if (sb != null)
-                return sb.ToString();
-            else
-                return text;
+            if (sb == null)
+                destination.Append(text);   // Faster to make single Append
         }
 
         internal static bool RequiresJsonEscape(char ch, bool escapeUnicode)
@@ -631,27 +718,18 @@ namespace NLog.Targets
             var props = GetProps(value);
             if (props.Key.Length == 0)
             {
-                try
-                {
-                    //no props
-                    QuoteValue(destination, EscapeString(Convert.ToString(value, CultureInfo.InvariantCulture), options.EscapeUnicode));
-                    return true;
-                }
-                catch
-                {
-                    return false;
-                }
+                //no props
+                return SerializeObjectAsString(value, TypeCode.Object, destination, options);
             }
 
             destination.Append('{');
 
             bool first = true;
-            int originalLength = 0;
             bool useLateBoundMethods = props.Key.Length == props.Value.Length;
 
             for (var i = 0; i < props.Key.Length; i++)
             {
-                originalLength = destination.Length;
+                var originalLength = destination.Length;
 
                 try
                 {
@@ -695,6 +773,29 @@ namespace NLog.Targets
             return true;
         }
 
+        private bool SerializeObjectAsString(object value, TypeCode objTypeCode, StringBuilder destination, JsonSerializeOptions options)
+        {
+            try
+            {
+                if (objTypeCode == TypeCode.Object)
+                {
+                    var str = Convert.ToString(value, CultureInfo.InvariantCulture);
+                    destination.Append('"');
+                    AppendStringEscape(destination, str, options.EscapeUnicode);
+                    destination.Append('"');
+                    return true;
+                }
+                else
+                {
+                    return SerializeSimpleTypeCodeValue(value, objTypeCode, destination, options, true);
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         /// <summary>
         /// Get properties, cached for a type
         /// </summary>
@@ -703,13 +804,13 @@ namespace NLog.Targets
         private KeyValuePair<PropertyInfo[], ReflectionHelpers.LateBoundMethod[]> GetProps(object value)
         {
             var type = value.GetType();
-            KeyValuePair<PropertyInfo[],ReflectionHelpers.LateBoundMethod[]> props;
+            KeyValuePair<PropertyInfo[], ReflectionHelpers.LateBoundMethod[]> props;
             if (_propsCache.TryGetValue(type, out props))
             {
                 if (props.Key.Length != 0 && props.Value.Length == 0)
                 {
                     var lateBoundMethods = new ReflectionHelpers.LateBoundMethod[props.Key.Length];
-                    for(int i = 0; i < props.Key.Length; i++)
+                    for (int i = 0; i < props.Key.Length; i++)
                     {
                         lateBoundMethods[i] = ReflectionHelpers.CreateLateBoundMethod(props.Key[i].GetGetMethod());
                     }
@@ -727,12 +828,22 @@ namespace NLog.Targets
             }
             catch (Exception ex)
             {
-                Common.InternalLogger.Warn(ex, "Failed to get JSON properties for type: {0}", type);
+                InternalLogger.Warn(ex, "Failed to get JSON properties for type: {0}", type);
             }
             finally
             {
                 if (properties == null)
                     properties = ArrayHelper.Empty<PropertyInfo>();
+            }
+
+            // Skip Index-Item-Properties (Ex. public string this[int Index])
+            foreach (var prop in properties)
+            {
+                if (!prop.CanRead || prop.GetIndexParameters().Length != 0 || prop.GetGetMethod() == null)
+                {
+                    properties = properties.Where(p => p.CanRead && p.GetIndexParameters().Length == 0 && p.GetGetMethod() != null).ToArray();
+                    break;
+                }
             }
 
             props = new KeyValuePair<PropertyInfo[], ReflectionHelpers.LateBoundMethod[]>(properties, ArrayHelper.Empty<ReflectionHelpers.LateBoundMethod>());

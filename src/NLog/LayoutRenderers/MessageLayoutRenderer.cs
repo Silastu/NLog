@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -34,17 +34,16 @@
 namespace NLog.LayoutRenderers
 {
     using System;
-    using System.Diagnostics;
     using System.Text;
-
-    using Config;
-    using Internal;
+    using NLog.Config;
+    using NLog.Internal;
 
     /// <summary>
     /// The formatted log message.
     /// </summary>
     [LayoutRenderer("message")]
     [ThreadAgnostic]
+    [ThreadSafe]
     public class MessageLayoutRenderer : LayoutRenderer
     {
         /// <summary>
@@ -81,9 +80,21 @@ namespace NLog.LayoutRenderers
         protected override void Append(StringBuilder builder, LogEventInfo logEvent)
         {
             if (Raw)
+            {
                 builder.Append(logEvent.Message);
+            }
             else
-                builder.Append(logEvent.FormattedMessage);
+            {
+                if (ReferenceEquals(logEvent.MessageFormatter, LogMessageTemplateFormatter.DefaultAutoSingleTarget.MessageFormatter))
+                {
+                    // Skip string-allocation of LogEventInfo.FormattedMessage, but just write directly to StringBuilder
+                    logEvent.AppendFormattedMessage(LogMessageTemplateFormatter.DefaultAutoSingleTarget, builder);
+                }
+                else
+                {
+                    builder.Append(logEvent.FormattedMessage);
+                }
+            }
             if (WithException && logEvent.Exception != null)
             {
                 builder.Append(ExceptionSeparator);

@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -33,7 +33,7 @@
 
 using JetBrains.Annotations;
 
-#if !SILVERLIGHT && !NETSTANDARD1_5
+#if !SILVERLIGHT && !NETSTANDARD1_0
 
 namespace NLog.Targets
 {
@@ -133,7 +133,7 @@ namespace NLog.Targets
                     }
                     catch (Exception ex)
                     {
-                        InternalLogger.Warn(ex, "reading 'From' from .config failed.");
+                        InternalLogger.Warn(ex, "MailTarget(Name={0}): Reading 'From' from .config failed.", Name);
 
                         if (ex.MustBeRethrown())
                         {
@@ -213,7 +213,7 @@ namespace NLog.Targets
         /// Gets or sets a value indicating whether to add new lines between log entries.
         /// </summary>
         /// <value>A value of <c>true</c> if new lines should be added; otherwise, <c>false</c>.</value>
-        /// <docgen category='Layout Options' order='99' />
+        /// <docgen category='Message Options' order='99' />
         public bool AddNewLines { get; set; }
 
         /// <summary>
@@ -239,14 +239,14 @@ namespace NLog.Targets
         /// <summary>
         /// Gets or sets encoding to be used for sending e-mail.
         /// </summary>
-        /// <docgen category='Layout Options' order='20' />
+        /// <docgen category='Message Options' order='20' />
         [DefaultValue("UTF8")]
         public Encoding Encoding { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether to send message as HTML instead of plain text.
         /// </summary>
-        /// <docgen category='Layout Options' order='11' />
+        /// <docgen category='Message Options' order='11' />
         [DefaultValue(false)]
         public bool Html { get; set; }
 
@@ -313,12 +313,14 @@ namespace NLog.Targets
         /// <summary>
         /// Gets or sets the priority used for sending mails.
         /// </summary>
+        /// <docgen category='Message Options' order='100' />
         public Layout Priority { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether NewLine characters in the body should be replaced with <br/> tags.
         /// </summary>
         /// <remarks>Only happens when <see cref="Html"/> is set to true.</remarks>
+        /// <docgen category='Message Options' order='100' />
         [DefaultValue(false)]
         public bool ReplaceNewlineWithBrTagInHtml { get; set; }
 
@@ -326,6 +328,7 @@ namespace NLog.Targets
         /// Gets or sets a value indicating the SMTP client timeout.
         /// </summary>
         /// <remarks>Warning: zero is not infinit waiting</remarks>
+        /// <docgen category='SMTP Options' order='100' />
         [DefaultValue(10000)]
         public int Timeout { get; set; }
 
@@ -413,9 +416,13 @@ namespace NLog.Targets
                             ConfigureMailClient(lastEvent, client);
                         }
 
-                        InternalLogger.Debug("Sending mail to {0} using {1}:{2} (ssl={3})", msg.To, client.Host, client.Port, client.EnableSsl);
-                        InternalLogger.Trace("  Subject: '{0}'", msg.Subject);
-                        InternalLogger.Trace("  From: '{0}'", msg.From.ToString());
+                        if (client.EnableSsl)
+                            InternalLogger.Debug("MailTarget(Name={0}): Sending mail to {1} using {2}:{3} (ssl=true)", Name, msg.To, client.Host, client.Port);
+                        else
+                            InternalLogger.Debug("MailTarget(Name={0}): Sending mail to {1} using {2}:{3} (ssl=false)", Name, msg.To, client.Host, client.Port);
+
+                        InternalLogger.Trace("MailTarget(Name={0}):   Subject: '{1}'", Name, msg.Subject);
+                        InternalLogger.Trace("MailTarget(Name={0}):   From: '{1}'", Name, msg.From.ToString());
 
                         client.Send(msg);
 
@@ -429,7 +436,7 @@ namespace NLog.Targets
             catch (Exception exception)
             {
                 //always log
-                InternalLogger.Error(exception, "Error sending mail.");
+                InternalLogger.Error(exception, "MailTarget(Name={0}): Error sending mail.", Name);
 
                 if (exception.MustBeRethrown())
                 {
@@ -522,7 +529,7 @@ namespace NLog.Targets
 
                 if (SmtpAuthentication == SmtpAuthenticationMode.Ntlm)
                 {
-                    InternalLogger.Trace("  Using NTLM authentication.");
+                    InternalLogger.Trace("MailTarget(Name={0}):   Using NTLM authentication.", Name);
                     client.Credentials = CredentialCache.DefaultNetworkCredentials;
                 }
                 else if (SmtpAuthentication == SmtpAuthenticationMode.Basic)
@@ -530,7 +537,7 @@ namespace NLog.Targets
                     string username = SmtpUserName.Render(lastEvent);
                     string password = SmtpPassword.Render(lastEvent);
 
-                    InternalLogger.Trace("  Using basic authentication: Username='{0}' Password='{1}'", username, new string('*', password.Length));
+                    InternalLogger.Trace("MailTarget(Name={0}):   Using basic authentication: Username='{1}' Password='{2}'", Name, username, new string('*', password.Length));
                     client.Credentials = new NetworkCredential(username, password);
                 }
 
@@ -629,7 +636,7 @@ namespace NLog.Targets
         {
             var msg = new MailMessage();
 
-            var renderedFrom = From == null ? null : From.Render(lastEvent);
+            var renderedFrom = From?.Render(lastEvent);
 
             if (string.IsNullOrEmpty(renderedFrom))
             {
@@ -653,15 +660,14 @@ namespace NLog.Targets
             if (Priority != null)
             {
                 var renderedPriority = Priority.Render(lastEvent);
-                try
+                if (ConversionHelpers.TryParseEnum(renderedPriority, out MailPriority mailPriority))
                 {
-
-                    msg.Priority = (MailPriority)Enum.Parse(typeof(MailPriority), renderedPriority, true);
+                    msg.Priority = mailPriority;
                 }
-                catch
+                else
                 {
-                    InternalLogger.Warn("Could not convert '{0}' to MailPriority, valid values are Low, Normal and High. Using normal priority as fallback.");
                     msg.Priority = MailPriority.Normal;
+                    InternalLogger.Warn("MailTarget(Name={0}): Could not convert '{1}' to MailPriority, valid values are Low, Normal and High. Using normal priority as fallback.", Name, renderedPriority);
                 }
             }
             msg.Body = body;

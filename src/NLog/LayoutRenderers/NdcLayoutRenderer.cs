@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -35,11 +35,13 @@ namespace NLog.LayoutRenderers
 {
     using System;
     using System.Text;
+    using NLog.Config;
 
     /// <summary>
     /// Nested Diagnostic Context item. Provided for compatibility with log4net.
     /// </summary>
     [LayoutRenderer("ndc")]
+    [ThreadSafe]
     public class NdcLayoutRenderer : LayoutRenderer
     {
         /// <summary>

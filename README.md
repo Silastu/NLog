@@ -3,17 +3,16 @@
 [![NuGet](https://img.shields.io/nuget/v/nlog.svg)](https://www.nuget.org/packages/NLog)
 [![Semantic Versioning](https://img.shields.io/badge/semver-2.0.0-3D9FE0.svg)](http://semver.org/)
 [![Twitter Follow](https://img.shields.io/twitter/follow/NLogOfficial.svg?style=social?maxAge=2592000)](https://twitter.com/NLogOfficial)
-[![Rager Releases](http://rager.io/badge.svg?url=https%3A%2F%2Fgithub.com%2FNLog%2FNLog)](http://rager.io/projects/search?badge=1&query=github.com/nlog/nlog)
 [![StackOverflow](https://img.shields.io/stackexchange/stackoverflow/t/nlog.svg?maxAge=2592000&label=stackoverflow)](https://stackoverflow.com/questions/tagged/nlog) 
 [![license](https://img.shields.io/github/license/mashape/apistatus.svg)]()
 
 
-[![](https://sonarcloud.io/api/badges/measure?key=nlog&metric=ncloc)](https://sonarcloud.io/dashboard/?id=nlog) 
-[![](https://sonarcloud.io/api/badges/measure?key=nlog&metric=bugs)](https://sonarcloud.io/dashboard/?id=nlog) 
-[![](https://sonarcloud.io/api/badges/measure?key=nlog&metric=vulnerabilities)](https://sonarcloud.io/dashboard/?id=nlog) 
-[![](https://sonarcloud.io/api/badges/measure?key=nlog&metric=code_smells)](https://sonarcloud.io/project/issues?id=nlog&resolved=false&types=CODE_SMELL) 
-[![](https://sonarcloud.io/api/badges/measure?key=nlog&metric=duplicated_lines_density)](https://sonarcloud.io/component_measures/domain/Duplications?id=nlog) 
-[![](https://sonarcloud.io/api/badges/measure?key=nlog&metric=sqale_debt_ratio)](https://sonarcloud.io/dashboard/?id=nlog) 
+[![](https://sonarcloud.io/api/project_badges/measure?project=nlog&metric=ncloc)](https://sonarcloud.io/dashboard/?id=nlog) 
+[![](https://sonarcloud.io/api/project_badges/measure?project=nlog&metric=bugs)](https://sonarcloud.io/dashboard/?id=nlog) 
+[![](https://sonarcloud.io/api/project_badges/measure?project=nlog&metric=vulnerabilities)](https://sonarcloud.io/dashboard/?id=nlog) 
+[![](https://sonarcloud.io/api/project_badges/measure?project=nlog&metric=code_smells)](https://sonarcloud.io/project/issues?id=nlog&resolved=false&types=CODE_SMELL) 
+[![](https://sonarcloud.io/api/project_badges/measure?project=nlog&metric=duplicated_lines_density)](https://sonarcloud.io/component_measures/domain/Duplications?id=nlog) 
+[![](https://sonarcloud.io/api/project_badges/measure?project=nlog&metric=sqale_debt_ratio)](https://sonarcloud.io/dashboard/?id=nlog) 
 [![codecov.io](https://codecov.io/github/NLog/NLog/coverage.svg?branch=master)](https://codecov.io/github/NLog/NLog?branch=master)
 
 <!--
@@ -25,7 +24,7 @@
 
 <!--[NLog is Looking for Developers!](http://nlog-project.org/2015/08/05/NLog-is-looking-for-developers.html)-->
 
-[Docs are on the wiki](https://github.com/NLog/NLog/wiki)
+
 
 NLog is a free logging platform for .NET with rich log routing and management
 capabilities. It makes it easy to produce and manage high-quality logs for
@@ -44,7 +43,8 @@ Major releases will be posted on [project news](http://nlog-project.org/archives
 Getting started
 ---
 
-- For ASP.NET Core users, see [installation instructions](https://github.com/NLog/NLog.Web/wiki/Getting-started-with-ASP.NET-Core-(csproj---vs2017))
+- For ASP.NET Core 1 users, see [installation instructions](https://github.com/NLog/NLog.Web/wiki/Getting-started-with-ASP.NET-Core-(csproj---vs2017))
+- For ASP.NET Core 2 users, see [installation instructions](https://github.com/NLog/NLog.Web/wiki/Getting-started-with-ASP.NET-Core-2)
 - ASP.NET (classic) users: 
   1. Install [NLog.Config NuGet package](https://www.nuget.org/packages/NLog.config)
   2. recommended, install also install [NLog.Web NuGet package](https://www.nuget.org/packages/NLog.Web)
@@ -60,28 +60,36 @@ For the possible options in the config, check the [Target list](https://github.c
 Having troubles? Check the [troubleshooting guide](https://github.com/NLog/NLog/wiki/Logging-troubleshooting)
 
 
+
+-----
+
+ ℹ️ Looking for NLog 5? Just install NLog 4.5!
+
+NLog 4.5 implements the platforms added in NLog 5 (.NET Standard 1, .NET Standard 2, UWP, etc) and added structural logging, *without breaking changes*!
+
+----
+
 Packages & Status
 ---
 NLog consists of multiple packages. Most of the functionality is inside the NLog (core) package. What's inside the packages? See [targets](https://github.com/NLog/NLog/wiki/Targets) and [layout renderers](https://github.com/NLog/NLog/wiki/Layout-Renderers) overview!
 
 Package  | Build status | NuGet 
 -------- | :------------ | :------------ 
-NLog                                    | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog/master.svg)](https://ci.appveyor.com/project/nlog/nlog/branch/master)                   | [![NuGet](https://img.shields.io/nuget/v/nlog.svg)](https://www.nuget.org/packages/NLog)
-NLog (.NET standard 1.x)   - coreCLR branch                                             | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog/coreclr.svg)](https://ci.appveyor.com/project/nlog/nlog/branch/coreclr)                   | [![NuGet Pre Release](https://img.shields.io/nuget/vpre/nlog.svg)](https://www.nuget.org/packages/NLog)
-[NLog (Microsoft Logging Platform)](https://github.com/NLog/NLog.Extensions.Logging)  | [![Build status](https://img.shields.io/appveyor/ci/nlog/nlog-framework-logging/master.svg)](https://ci.appveyor.com/project/nlog/nlog-framework-logging/branch/master) | [![NuGet Pre Release](https://img.shields.io/nuget/vpre/NLog.Extensions.Logging.svg)](https://www.nuget.org/packages/NLog.Extensions.Logging)
-NLog (Mono, .NET standard 2)                                                         | [![Build Status](https://travis-ci.org/NLog/NLog.svg?branch=master)](https://travis-ci.org/NLog/NLog)                                                         |
-NLog.Config                                                         | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog/master.svg)](https://ci.appveyor.com/project/nlog/nlog/branch/master)                   | [![NuGet package](https://badge.fury.io/nu/NLog.Config.svg)](https://www.nuget.org/packages/NLog.Config)
-[NLog.Contrib.ActiveMQ](https://github.com/NLog/NLog.Contrib.ActiveMQ)                                              | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-contrib-activemq/master.svg)](https://ci.appveyor.com/project/nlog/nlog-contrib-activemq/branch/master)                   | [![NuGet package](https://badge.fury.io/nu/NLog.Contrib.ActiveMQ.svg)](https://www.nuget.org/packages/NLog.Contrib.ActiveMQ)
-NLog.Extended                                                       | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog/master.svg)](https://ci.appveyor.com/project/nlog/nlog/branch/master)                   | [![NuGet package](https://badge.fury.io/nu/NLog.Extended.svg)](https://www.nuget.org/packages/NLog.Extended)
-[NLog.Elmah](https://github.com/NLog/NLog.Elmah)                    | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-Elmah/master.svg)](https://ci.appveyor.com/project/nlog/nlog-Elmah/branch/master)               | [![NuGet package](https://badge.fury.io/nu/NLog.Elmah.svg)](https://www.nuget.org/packages/NLog.Elmah)
-[NLog.Etw](https://github.com/NLog/NLog.Etw)                        | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-etw/master.svg)](https://ci.appveyor.com/project/nlog/nlog-etw/branch/master)                   | [![NuGet package](https://badge.fury.io/nu/NLog.Etw.svg)](https://www.nuget.org/packages/NLog.Etw)
-[NLog.InstallNLogConfig](https://github.com/NLog/NLog.InstallNLogConfig)                        | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-InstallNLogConfig/master.svg)](https://ci.appveyor.com/project/nlog/nlog-InstallNLogConfig/branch/master)                   | [![NuGet package](https://badge.fury.io/nu/NLog.InstallNLogConfig.svg)](https://www.nuget.org/packages/NLog.InstallNLogConfig)
-[NLog.ManualFlush](https://github.com/NLog/NLog.ManualFlush)        | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-ManualFlush/master.svg)](https://ci.appveyor.com/project/nlog/nlog-ManualFlush/branch/master)   | [![NuGet package](https://badge.fury.io/nu/NLog.ManualFlush.svg)](https://www.nuget.org/packages/NLog.ManualFlush)
-NLog.Schema                                                         | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog/master.svg)](https://ci.appveyor.com/project/nlog/nlog/branch/master)                   | [![NuGet package](https://badge.fury.io/nu/NLog.Schema.svg)](https://www.nuget.org/packages/NLog.Schema)
-[NLog.Web](https://github.com/NLog/NLog.Web)                        | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-web/master.svg)](https://ci.appveyor.com/project/nlog/nlog-web/branch/master)                   | [![NuGet package](https://badge.fury.io/nu/NLog.Web.svg)](https://www.nuget.org/packages/NLog.Web)
-[NLog.Web for ASP.NET Core](https://github.com/NLog/NLog.Web)                        | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-web/master.svg)](https://ci.appveyor.com/project/nlog/nlog-web/branch/master)                   | [![NuGet package](https://badge.fury.io/nu/NLog.Web.AspNetCore.svg)](https://www.nuget.org/packages/NLog.Web.AspNetCore)
-[NLog.Windows.Forms](https://github.com/NLog/NLog.Windows.Forms)    | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-windows-forms/master.svg)](https://ci.appveyor.com/project/nlog/nlog-windows-forms/branch/master)           | [![NuGet package](https://badge.fury.io/nu/NLog.Windows.Forms.svg)](https://www.nuget.org/packages/NLog.Windows.Forms)
-[NLog.Owin.Logging](https://github.com/NLog/NLog.Owin.Logging)      | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-owin-logging/master.svg)](https://ci.appveyor.com/project/nlog/nlog-owin-logging/branch/master)          | [![NuGet package](https://badge.fury.io/nu/NLog.Owin.Logging.svg)](https://www.nuget.org/packages/NLog.Owin.Logging)
+NLog                                    | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog/master.svg)](https://ci.appveyor.com/project/nlog/nlog/branch/master)   [![Build Status](https://travis-ci.org/NLog/NLog.svg?branch=master)](https://travis-ci.org/NLog/NLog)                    | [![NuGet](https://img.shields.io/nuget/v/nlog.svg)](https://www.nuget.org/packages/NLog)
+[NLog.Extensions.Logging](https://github.com/NLog/NLog.Extensions.Logging)  | [![Build status](https://img.shields.io/appveyor/ci/nlog/nlog-framework-logging/master.svg)](https://ci.appveyor.com/project/nlog/nlog-framework-logging/branch/master) | [![NuGet Pre Release](https://img.shields.io/nuget/vpre/NLog.Extensions.Logging.svg)](https://www.nuget.org/packages/NLog.Extensions.Logging)
+NLog.Config                                                         | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog/master.svg)](https://ci.appveyor.com/project/nlog/nlog/branch/master)                   | [![NuGet package](https://img.shields.io/nuget/v/NLog.Config.svg)](https://www.nuget.org/packages/NLog.Config)
+[NLog.Contrib.ActiveMQ](https://github.com/NLog/NLog.Contrib.ActiveMQ)                                              | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-contrib-activemq/master.svg)](https://ci.appveyor.com/project/nlog/nlog-contrib-activemq/branch/master)                   | [![NuGet package](https://img.shields.io/nuget/v/NLog.Contrib.ActiveMQ.svg)](https://www.nuget.org/packages/NLog.Contrib.ActiveMQ)
+NLog.Extended                                                       | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog/master.svg)](https://ci.appveyor.com/project/nlog/nlog/branch/master)                   | [![NuGet package](https://img.shields.io/nuget/v/NLog.Extended.svg)](https://www.nuget.org/packages/NLog.Extended)
+[NLog.Elmah](https://github.com/NLog/NLog.Elmah)                    | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-Elmah/master.svg)](https://ci.appveyor.com/project/nlog/nlog-Elmah/branch/master)               | [![NuGet package](https://img.shields.io/nuget/v/NLog.Elmah.svg)](https://www.nuget.org/packages/NLog.Elmah)
+[NLog.Etw](https://github.com/NLog/NLog.Etw)                        | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-etw/master.svg)](https://ci.appveyor.com/project/nlog/nlog-etw/branch/master)                   | [![NuGet package](https://img.shields.io/nuget/v/NLog.Etw.svg)](https://www.nuget.org/packages/NLog.Etw)
+[NLog.InstallNLogConfig](https://github.com/NLog/NLog.InstallNLogConfig)                        | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-InstallNLogConfig/master.svg)](https://ci.appveyor.com/project/nlog/nlog-InstallNLogConfig/branch/master)                   | [![NuGet package](https://img.shields.io/nuget/v/NLog.InstallNLogConfig.svg)](https://www.nuget.org/packages/NLog.InstallNLogConfig)
+[NLog.MailKit](https://github.com/NLog/NLog.MailKit)                        | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-mailkit/master.svg)](https://ci.appveyor.com/project/nlog/nlog-mailkit/branch/master)                   | [![NuGet package](https://img.shields.io/nuget/v/NLog.MailKit.svg)](https://www.nuget.org/packages/NLog.MailKit)
+[NLog.ManualFlush](https://github.com/NLog/NLog.ManualFlush)        | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-ManualFlush/master.svg)](https://ci.appveyor.com/project/nlog/nlog-ManualFlush/branch/master)   | [![NuGet package](https://img.shields.io/nuget/v/NLog.ManualFlush.svg)](https://www.nuget.org/packages/NLog.ManualFlush)
+NLog.Schema                                                         | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog/master.svg)](https://ci.appveyor.com/project/nlog/nlog/branch/master)                   | [![NuGet package](https://img.shields.io/nuget/v/NLog.Schema.svg)](https://www.nuget.org/packages/NLog.Schema)
+[NLog.Web](https://github.com/NLog/NLog.Web)                        | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-web/master.svg)](https://ci.appveyor.com/project/nlog/nlog-web/branch/master)                   | [![NuGet package](https://img.shields.io/nuget/v/NLog.Web.svg)](https://www.nuget.org/packages/NLog.Web)
+[NLog.Web for ASP.NET Core](https://github.com/NLog/NLog.Web)                        | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-web/master.svg)](https://ci.appveyor.com/project/nlog/nlog-web/branch/master)                   | [![NuGet package](https://img.shields.io/nuget/v/NLog.Web.AspNetCore.svg)](https://www.nuget.org/packages/NLog.Web.AspNetCore)
+[NLog.Windows.Forms](https://github.com/NLog/NLog.Windows.Forms)    | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-windows-forms/master.svg)](https://ci.appveyor.com/project/nlog/nlog-windows-forms/branch/master)           | [![NuGet package](https://img.shields.io/nuget/v/NLog.Windows.Forms.svg)](https://www.nuget.org/packages/NLog.Windows.Forms)
+[NLog.Owin.Logging](https://github.com/NLog/NLog.Owin.Logging)      | [![AppVeyor](https://img.shields.io/appveyor/ci/nlog/nlog-owin-logging/master.svg)](https://ci.appveyor.com/project/nlog/nlog-owin-logging/branch/master)          | [![NuGet package](https://img.shields.io/nuget/v/NLog.Owin.Logging.svg)](https://www.nuget.org/packages/NLog.Owin.Logging)
 
 
 

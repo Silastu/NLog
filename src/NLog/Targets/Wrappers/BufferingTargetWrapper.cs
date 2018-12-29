@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -36,8 +36,8 @@ namespace NLog.Targets.Wrappers
     using System;
     using System.ComponentModel;
     using System.Threading;
-    using Common;
-    using Internal;
+    using NLog.Common;
+    using NLog.Internal;
 
     /// <summary>
     /// A target that buffers log events and sends them in batches to the wrapped target.
@@ -151,6 +151,7 @@ namespace NLog.Targets.Wrappers
         /// setting to <see cref="BufferingTargetWrapperOverflowAction.Flush"/> will flush the
         /// entire buffer to the wrapped target.
         /// </remarks>
+        /// <docgen category='Buffering Options' order='100' />
         [DefaultValue("Flush")]
         public BufferingTargetWrapperOverflowAction OverflowAction { get; set; }
 
@@ -171,7 +172,7 @@ namespace NLog.Targets.Wrappers
         {
             base.InitializeTarget();
             _buffer = new LogEventInfoBuffer(BufferSize, false, 0);
-            InternalLogger.Trace("BufferingWrapper '{0}': create timer", Name);
+            InternalLogger.Trace("BufferingWrapper(Name={0}): Create Timer", Name);
             _flushTimer = new Timer(FlushCallback, null, Timeout.Infinite, Timeout.Infinite);
         }
 
@@ -203,7 +204,6 @@ namespace NLog.Targets.Wrappers
         /// <param name="logEvent">The log event.</param>
         protected override void Write(AsyncLogEventInfo logEvent)
         {
-            MergeEventProperties(logEvent.LogEvent);
             PrecalculateVolatileLayouts(logEvent.LogEvent);
 
             int count = _buffer.Append(logEvent);
@@ -243,7 +243,7 @@ namespace NLog.Targets.Wrappers
             }
             catch (Exception exception)
             {
-                InternalLogger.Error(exception, "BufferingWrapper '{0}': Error in flush procedure.", Name);
+                InternalLogger.Error(exception, "BufferingWrapper(Name={0}): Error in flush procedure.", Name);
 
                 if (exception.MustBeRethrownImmediately())
                 {
@@ -256,7 +256,7 @@ namespace NLog.Targets.Wrappers
         {
             if (WrappedTarget == null)
             {
-                InternalLogger.Error("BufferingWrapper '{0}': WrappedTarget is NULL", Name);
+                InternalLogger.Error("BufferingWrapper(Name={0}): WrappedTarget is NULL", Name);
                 return;
             }
 
@@ -266,7 +266,7 @@ namespace NLog.Targets.Wrappers
                 if (logEvents.Length > 0)
                 {
                     if (reason != null)
-                        InternalLogger.Trace("BufferingWrapper '{0}': writing {1} events ({2})", Name, logEvents.Length, reason);
+                        InternalLogger.Trace("BufferingWrapper(Name={0}): Writing {1} events ({2})", Name, logEvents.Length, reason);
                     WrappedTarget.WriteAsyncLogEvents(logEvents);
                 }
             }

@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -39,6 +39,7 @@ namespace NLog.Internal.FileAppenders
     using System.Collections;
     using System.Collections.Specialized;
     using System.IO;
+    using System.Security;
     using System.Text;
     using System.Threading;
     using System.Xml;
@@ -60,6 +61,7 @@ namespace NLog.Internal.FileAppenders
     /// processes are trying to write to the same file, because setting the file
     /// pointer to the end of the file and appending can be made one operation.
     /// </remarks>
+    [SecuritySafeCritical]
     internal class UnixMultiProcessFileAppender : BaseMutexFileAppender
     {
         private UnixStream _file;
@@ -180,19 +182,6 @@ namespace NLog.Internal.FileAppenders
             return CreationTimeUtc;    // File is kept open, so creation time is static
         }
         
-        /// <summary>
-        /// Gets the last time the file associated with the appeander is written. The time returned is in Coordinated 
-        /// Universal Time [UTC] standard.
-        /// </summary>
-        /// <returns>The time the file was last written to.</returns>
-        public override DateTime? GetFileLastWriteTimeUtc()
-        {
-            FileInfo fileInfo = new FileInfo(FileName);
-            if (!fileInfo.Exists)
-                return null;
-            return fileInfo.LastWriteTime;
-        }
-
         /// <summary>
         /// Gets the length in bytes of the file associated with the appeander.
         /// </summary>

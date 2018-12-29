@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -31,7 +31,7 @@
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-#if !SILVERLIGHT && !NETSTANDARD1_5
+#if !SILVERLIGHT && !NETSTANDARD1_0
 
 namespace NLog.LayoutRenderers
 {
@@ -39,11 +39,13 @@ namespace NLog.LayoutRenderers
     using System.ComponentModel;
     using System.Security.Principal;
     using System.Text;
+    using NLog.Config;
 
     /// <summary>
     /// Thread identity information (name and authentication information).
     /// </summary>
     [LayoutRenderer("identity")]
+    [ThreadSafe]
     public class IdentityLayoutRenderer : LayoutRenderer
     {
         /// <summary>
@@ -106,14 +108,7 @@ namespace NLog.LayoutRenderers
                         builder.Append(separator);
                         separator = Separator;
 
-                        if (identity.IsAuthenticated)
-                        {
-                            builder.Append("auth");
-                        }
-                        else
-                        {
-                            builder.Append("notauth");
-                        }
+                        builder.Append(identity.IsAuthenticated ? "auth" : "notauth");
                     }
 
                     if (AuthType)

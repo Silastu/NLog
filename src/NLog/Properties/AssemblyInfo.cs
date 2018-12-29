@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -47,7 +47,7 @@ using System.Security;
 #endif
 #if !SILVERLIGHT4
 [assembly: AllowPartiallyTrustedCallers]
-#if !NET3_5 && !MONO_2_0 && !SILVERLIGHT5 && !__IOS__ && !__ANDROID__ && !WINDOWS_PHONE && !NETSTANDARD1_5
+#if !NET3_5 && !MONO_2_0 && !SILVERLIGHT5 && !__IOS__ && !__ANDROID__ && !WINDOWS_PHONE && !NETSTANDARD1_0
 [assembly: SecurityRules(SecurityRuleSet.Level1)]
 #endif
 #endif

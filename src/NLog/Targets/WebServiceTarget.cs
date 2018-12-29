@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -102,6 +102,11 @@ namespace NLog.Targets
             OptimizeBufferReuse = true;
 
             Headers = new List<MethodCallParameter>();
+
+#if NETSTANDARD
+            // WebRequest.GetSystemWebProxy throws PlatformNotSupportedException on NetCore, when Proxy is not configured
+            ProxyType = WebServiceProxyType.NoProxy;
+#endif
         }
 
         /// <summary>
@@ -168,6 +173,7 @@ namespace NLog.Targets
         /// 
         /// This will only work for UTF-8.
         /// </summary>
+        /// <docgen category='Web Service Options' order='10' />
         public bool? IncludeBOM { get; set; }
 
         /// <summary>
@@ -180,14 +186,14 @@ namespace NLog.Targets
         /// Gets or sets a value whether escaping be done according to Rfc3986 (Supports Internationalized Resource Identifiers - IRIs)
         /// </summary>
         /// <value>A value of <c>true</c> if Rfc3986; otherwise, <c>false</c> for legacy Rfc2396.</value>
-        /// <docgen category='Web Service Options' order='10' />
+        /// <docgen category='Web Service Options' order='100' />
         public bool EscapeDataRfc3986 { get; set; }
 
         /// <summary>
         /// Gets or sets a value whether escaping be done according to the old NLog style (Very non-standard)
         /// </summary>
         /// <value>A value of <c>true</c> if legacy encoding; otherwise, <c>false</c> for standard UTF8 encoding.</value>
-        /// <docgen category='Web Service Options' order='10' />
+        /// <docgen category='Web Service Options' order='100' />
         public bool EscapeDataNLogLegacy { get; set; }
 
         /// <summary>
@@ -196,7 +202,7 @@ namespace NLog.Targets
         /// If so, this property must not be <c>null</c>.
         /// (see <see cref="Protocol"/> and <see cref="WebServiceProtocol.XmlPost"/>).
         /// </summary>
-        /// <docgen category='Web Service Options' order='10' />
+        /// <docgen category='Web Service Options' order='100' />
         public string XmlRoot { get; set; }
 
         /// <summary>
@@ -204,7 +210,7 @@ namespace NLog.Targets
         /// if POST of XML document chosen.
         /// (see <see cref="Protocol"/> and <see cref="WebServiceProtocol.XmlPost"/>).
         /// </summary>
-        /// <docgen category='Web Service Options' order='10' />
+        /// <docgen category='Web Service Options' order='100' />
         public string XmlRootNamespace { get; set; }
 
         /// <summary>
@@ -218,167 +224,11 @@ namespace NLog.Targets
         /// <summary>
         /// Indicates whether to pre-authenticate the HttpWebRequest (Requires 'Authorization' in <see cref="Headers"/> parameters)
         /// </summary>
-        /// <docgen category='Web Service Options' order='10' />
+        /// <docgen category='Web Service Options' order='100' />
         public bool PreAuthenticate { get; set; }
 #endif
 
         private readonly AsyncOperationCounter _pendingManualFlushList = new AsyncOperationCounter();
-
-        private bool _foundEnableGroupLayout;
-        private bool _onlyEnableGroupLayout;   // Attempt to minimize Parameter-Array-Key-allocations
-
-        /// <summary>
-        /// Initializes the target
-        /// </summary>
-        protected override void InitializeTarget()
-        {
-            _foundEnableGroupLayout = false;
-            _onlyEnableGroupLayout = true;
-            base.InitializeTarget();
-            for (int i = 0; i < Parameters.Count; ++i)
-            {
-                if (Parameters[i].EnableGroupLayout)
-                {
-                    _foundEnableGroupLayout = true;
-                    if (!_onlyEnableGroupLayout)
-                        break;
-                }
-                else
-                {
-                    _onlyEnableGroupLayout = false;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Writes an array of logging events to the log target
-        /// </summary>
-        /// <param name="logEvents">Array of logging events to write</param>
-        protected override void Write(IList<AsyncLogEventInfo> logEvents)
-        {
-            if (!_foundEnableGroupLayout)
-            {
-                base.Write(logEvents);
-            }
-            else if (logEvents.Count == 1)
-            {
-                base.Write(logEvents[0]);
-            }
-            else
-            {
-                if (Headers != null && Headers.Count > 0)
-                {
-                    if (_convetToHeaderArrayDelegate == null)
-                        _convetToHeaderArrayDelegate = (l) => ConvertToHeaderArray(l.LogEvent);
-                    var headerBuckets = logEvents.BucketSort(_convetToHeaderArrayDelegate, ArrayDeepEqualityComparer<string>.Default);
-                    foreach (var headerBucket in headerBuckets)
-                    {
-                        DoGroupInvoke(headerBucket.Value, headerBucket.Key);
-                    }
-                }
-                else
-                {
-                    DoGroupInvoke(logEvents, ArrayHelper.Empty<string>());
-                }
-            }
-        }
-        private SortHelpers.KeySelector<AsyncLogEventInfo, string[]> _convetToHeaderArrayDelegate;
-
-        string[] ConvertToHeaderArray(LogEventInfo logEvent)
-        {
-            string[] headers = new string[Headers.Count];
-            for (int i = 0; i < Headers.Count; i++)
-            {
-                headers[i] = RenderLogEvent(Headers[i].Layout, logEvent);
-            }
-            return headers;
-        }
-
-        /// <summary>
-        /// Writes a group of LogEvents in a single WebRequest
-        /// </summary>
-        /// <param name="logEvents">Array of logging events to write</param>
-        /// <param name="headerValues">WebRequest Header Values matching the LogEvents group</param>
-        private void DoGroupInvoke(IList<AsyncLogEventInfo> logEvents, string[] headerValues)
-        {
-            if (_convetToParameterArrayDelegate == null)
-                _convetToParameterArrayDelegate = (l) => ConvetToParameterArray(l.LogEvent, true);
-
-            var parameterBuckets = _onlyEnableGroupLayout
-                ? new SortHelpers.ReadOnlySingleBucketDictionary<object[], IList<AsyncLogEventInfo>>(new KeyValuePair<object[], IList<AsyncLogEventInfo>>(new object[Parameters.Count], logEvents), ArrayDeepEqualityComparer<object>.Default)
-                : logEvents.BucketSort(_convetToParameterArrayDelegate, ArrayDeepEqualityComparer<object>.Default);
-            foreach (var bucket in parameterBuckets)
-            {
-                for (int i = 0; i < Parameters.Count; ++i)
-                {
-                    var param = Parameters[i];
-                    if (param.EnableGroupLayout)
-                    {
-                        bucket.Key[i] = ConvertParameterGroupValue(bucket.Value, param);
-                    }
-                }
-
-                if (bucket.Value.Count > 1)
-                {
-                    AsyncContinuation[] groupContinuations = new AsyncContinuation[bucket.Value.Count];
-                    for (int i = 0; i < groupContinuations.Length; ++i)
-                    {
-                        groupContinuations[i] = bucket.Value[i].Continuation;
-                    }
-                    AsyncContinuation groupCompleted = (ex) =>
-                    {
-                        for (int i = 0; i < groupContinuations.Length; ++i)
-                            try { groupContinuations[i].Invoke(ex); } catch { /* Nothing to do about it */ };
-                    };
-                    DoGroupInvokeAsync(headerValues, bucket.Key, groupCompleted);
-                }
-                else
-                {
-                    DoGroupInvokeAsync(headerValues, bucket.Key, bucket.Value[0].Continuation);
-                }
-            }
-        }
-        private SortHelpers.KeySelector<AsyncLogEventInfo, object[]> _convetToParameterArrayDelegate;
-
-        class ArrayDeepEqualityComparer<TValue> : IEqualityComparer<TValue[]>
-        {
-            public static readonly ArrayDeepEqualityComparer<TValue> Default = new ArrayDeepEqualityComparer<TValue>();
-
-            public bool Equals(TValue[] x, TValue[] y)
-            {
-                if (x.Length != y.Length)
-                    return false;
-
-                object xval, yval;
-                for (int i = 0; i < x.Length; ++i)
-                {
-                    xval = x[i];
-                    yval = y[i];
-                    if (xval != null && yval != null)
-                    {
-                        if (!xval.Equals(yval))
-                            return false;
-                    }
-                    else if (!ReferenceEquals(xval, yval))
-                    {
-                        return false;
-                    }
-                }
-
-                return true;
-            }
-
-            public int GetHashCode(TValue[] obj)
-            {
-                int hashCode = obj.Length.GetHashCode();
-                for (int i = 0; i < obj.Length; ++i)
-                {
-                    if (obj[i] != null)
-                        hashCode = hashCode ^ obj[i].GetHashCode();
-                }
-                return hashCode;
-            }
-        }
 
         /// <summary>
         /// Calls the target method. Must be implemented in concrete classes.
@@ -425,23 +275,6 @@ namespace NLog.Targets
             DoInvoke(parameters, request, logEvent.Continuation);
         }
 
-        void DoGroupInvokeAsync(string[] headerValues, object[] parameters, AsyncContinuation continuation)
-        {
-            var request = (HttpWebRequest)WebRequest.Create(BuildWebServiceUrl(parameters));
-            if (Headers != null && Headers.Count > 0)
-            {
-                for (int i = 0; i < Headers.Count; i++)
-                {
-                    string headerValue = headerValues[i];
-                    if (headerValue == null)
-                        continue;
-                    request.Headers[Headers[i].Name] = headerValue;
-                }
-            }
-
-            DoInvoke(parameters, request, continuation);
-        }
-
         void DoInvoke(object[] parameters, HttpWebRequest request, AsyncContinuation continuation)
         {
             Func<AsyncCallback, IAsyncResult> begin = (r) => request.BeginGetRequestStream(r, null);
@@ -450,10 +283,9 @@ namespace NLog.Targets
 #if !SILVERLIGHT
             switch (ProxyType)
             {
-                case WebServiceProxyType.NoProxy:
-                    request.Proxy = null;
+                case WebServiceProxyType.DefaultWebProxy:
                     break;
-#if!NETSTANDARD1_5
+#if !NETSTANDARD1_0
                 case WebServiceProxyType.AutoProxy:
                     if (_activeProxy.Value == null)
                     {
@@ -475,10 +307,13 @@ namespace NLog.Targets
                     }
                     break;
 #endif
+                default:
+                    request.Proxy = null;
+                    break;
             }
 #endif
 
-#if !SILVERLIGHT && !NETSTANDARD1_5
+#if !SILVERLIGHT && !NETSTANDARD1_0
             if (PreAuthenticate || ProxyType == WebServiceProxyType.AutoProxy)
             {
                 request.PreAuthenticate = true;
@@ -488,7 +323,7 @@ namespace NLog.Targets
             DoInvoke(parameters, continuation, request, begin, getStream);
         }
 
-        internal void DoInvoke(object[] parameters, AsyncContinuation continuation, HttpWebRequest request, Func<AsyncCallback, IAsyncResult> beginFunc, 
+        internal void DoInvoke(object[] parameters, AsyncContinuation continuation, HttpWebRequest request, Func<AsyncCallback, IAsyncResult> beginFunc,
             Func<IAsyncResult, Stream> getStreamFunc)
         {
             Stream postPayload = null;
@@ -504,6 +339,13 @@ namespace NLog.Targets
                 postPayload = _activeProtocol.Value.PrepareRequest(request, parameters);
             }
 
+            var sendContinuation = CreateSendContinuation(continuation, request);
+
+            PostPayload(continuation, beginFunc, getStreamFunc, postPayload, sendContinuation);
+        }
+
+        private AsyncContinuation CreateSendContinuation(AsyncContinuation continuation, HttpWebRequest request)
+        {
             AsyncContinuation sendContinuation =
                 ex =>
                 {
@@ -528,10 +370,10 @@ namespace NLog.Targets
                                 }
                                 catch (Exception ex2)
                                 {
-                                    InternalLogger.Error(ex2, "Error when sending to Webservice: {0}", Name);
+                                    InternalLogger.Error(ex2, "WebServiceTarget(Name={0}): Error sending request", Name);
                                     if (ex2.MustBeRethrownImmediately())
                                     {
-                                        throw;  // Throwing exceptions here will crash the entire application (.NET 2.0 behavior)
+                                        throw; // Throwing exceptions here will crash the entire application (.NET 2.0 behavior)
                                     }
 
                                     DoInvokeCompleted(continuation, ex2);
@@ -541,7 +383,7 @@ namespace NLog.Targets
                     }
                     catch (Exception ex2)
                     {
-                        InternalLogger.Error(ex2, "Error when sending to Webservice: {0}", Name);
+                        InternalLogger.Error(ex2, "WebServiceTarget(Name={0}): Error starting request", Name);
                         if (ex2.MustBeRethrown())
                         {
                             throw;
@@ -550,7 +392,11 @@ namespace NLog.Targets
                         DoInvokeCompleted(continuation, ex2);
                     }
                 };
+            return sendContinuation;
+        }
 
+        private void PostPayload(AsyncContinuation continuation, Func<AsyncCallback, IAsyncResult> beginFunc, Func<IAsyncResult, Stream> getStreamFunc, Stream postPayload, AsyncContinuation sendContinuation)
+        {
             if (postPayload != null && postPayload.Length > 0)
             {
                 postPayload.Position = 0;
@@ -574,10 +420,10 @@ namespace NLog.Targets
                             }
                             catch (Exception ex)
                             {
-                                InternalLogger.Error(ex, "Error when sending to Webservice: {0}", Name);
+                                InternalLogger.Error(ex, "WebServiceTarget(Name={0}): Error sending post data", Name);
                                 if (ex.MustBeRethrownImmediately())
                                 {
-                                    throw;  // Throwing exceptions here will crash the entire application (.NET 2.0 behavior)
+                                    throw; // Throwing exceptions here will crash the entire application (.NET 2.0 behavior)
                                 }
 
                                 postPayload.Dispose();
@@ -587,7 +433,7 @@ namespace NLog.Targets
                 }
                 catch (Exception ex)
                 {
-                    InternalLogger.Error(ex, "Error when sending to Webservice: {0}", Name);
+                    InternalLogger.Error(ex, "WebServiceTarget(Name={0}): Error starting post data", Name);
                     if (ex.MustBeRethrown())
                     {
                         throw;
@@ -644,7 +490,8 @@ namespace NLog.Targets
             using (var targetBuilder = OptimizeBufferReuse ? ReusableLayoutBuilder.Allocate() : ReusableLayoutBuilder.None)
             {
                 StringBuilder sb = targetBuilder.Result ?? new StringBuilder();
-                BuildWebServiceQueryParameters(parameterValues, sb);
+                UrlHelper.EscapeEncodingFlag encodingFlags = UrlHelper.GetUriStringEncodingFlags(EscapeDataNLogLegacy, false, EscapeDataRfc3986);
+                BuildWebServiceQueryParameters(parameterValues, sb, encodingFlags);
                 queryParameters = sb.ToString();
             }
 
@@ -663,10 +510,8 @@ namespace NLog.Targets
             return builder.Uri;
         }
 
-        private void BuildWebServiceQueryParameters(object[] parameterValues, StringBuilder sb)
+        private void BuildWebServiceQueryParameters(object[] parameterValues, StringBuilder sb, UrlHelper.EscapeEncodingFlag encodingFlags)
         {
-            UrlHelper.EscapeEncodingFlag encodingFlags = UrlHelper.GetUriStringEncodingFlags(EscapeDataNLogLegacy, false, EscapeDataRfc3986);
-
             string separator = string.Empty;
             for (int i = 0; i < Parameters.Count; i++)
             {
@@ -761,18 +606,9 @@ namespace NLog.Targets
 
             protected override string ContentType => "application/x-www-form-urlencoded";
 
-            protected override string Separator => "&";
-
-            protected override void AppendFormattedParameter(StringBuilder builder, MethodCallParameter parameter, object value)
+            protected override void WriteStringContent(StringBuilder builder, object[] parameterValues)
             {
-                builder.Append(parameter.Name);
-                builder.Append('=');
-
-                string parameterValue = XmlHelper.XmlConvertToString(value);
-                if (!string.IsNullOrEmpty(parameterValue))
-                {
-                    UrlHelper.EscapeDataEncode(parameterValue, builder, _encodingFlags);
-                }
+                Target.BuildWebServiceQueryParameters(parameterValues, builder, _encodingFlags);
             }
         }
 
@@ -787,24 +623,29 @@ namespace NLog.Targets
 
             protected override string ContentType => "application/json";
 
-            protected override string Separator => ",";
-
-            protected override void BeginFormattedMessage(StringBuilder builder)
+            protected override void WriteStringContent(StringBuilder builder, object[] parameterValues)
             {
-                builder.Append('{');
-            }
-
-            protected override void EndFormattedMessage(StringBuilder builder)
-            {
-                builder.Append('}');
-            }
-
-            protected override void AppendFormattedParameter(StringBuilder builder, MethodCallParameter parameter, object value)
-            {
-                builder.Append('"');
-                builder.Append(parameter.Name);
-                builder.Append("\":");
-                JsonConverter.SerializeObject(value, builder);
+                if (Target.Parameters.Count == 1 && string.IsNullOrEmpty(Target.Parameters[0].Name) && parameterValues[0] is string s)
+                {
+                    // JsonPost with single nameless parameter means complex JsonLayout
+                    builder.Append(s);
+                }
+                else
+                {
+                    builder.Append("{");
+                    string separator = string.Empty;
+                    for (int i = 0; i < Target.Parameters.Count; ++i)
+                    {
+                        var parameter = Target.Parameters[i];
+                        builder.Append(separator);
+                        builder.Append('"');
+                        builder.Append(parameter.Name);
+                        builder.Append("\":");
+                        JsonConverter.SerializeObject(parameterValues[i], builder);
+                        separator = ",";
+                    }
+                    builder.Append('}');
+                }
             }
         }
 
@@ -887,35 +728,13 @@ namespace NLog.Targets
                 _encodingPreamble = target.Encoding.GetPreamble();
             }
 
-            protected abstract string Separator { get; }
-
-            protected virtual void BeginFormattedMessage(StringBuilder builder)
-            {
-            }
-
-            protected abstract void AppendFormattedParameter(StringBuilder builder, MethodCallParameter parameter, object value);
-
-            protected virtual void EndFormattedMessage(StringBuilder builder)
-            {
-            }
-
             protected override void WriteContent(MemoryStream ms, object[] parameterValues)
             {
                 lock (_reusableStringBuilder)
                 {
                     using (var targetBuilder = _reusableStringBuilder.Allocate())
                     {
-                        bool first = true;
-                        BeginFormattedMessage(targetBuilder.Result);
-                        for (int i = 0; i < Target.Parameters.Count; i++)
-                        {
-                            if (!first)
-                                targetBuilder.Result.Append(Separator);
-                            else
-                                first = false;
-                            AppendFormattedParameter(targetBuilder.Result, Target.Parameters[i], parameterValues[i]);
-                        }
-                        EndFormattedMessage(targetBuilder.Result);
+                        WriteStringContent(targetBuilder.Result, parameterValues);
 
                         using (var transformBuffer = _reusableEncodingBuffer.Allocate())
                         {
@@ -926,6 +745,8 @@ namespace NLog.Targets
                     }
                 }
             }
+
+            protected abstract void WriteStringContent(StringBuilder builder, object[] parameterValues);
         }
 
         private class HttpPostXmlDocumentFormatter : HttpPostXmlFormatterBase

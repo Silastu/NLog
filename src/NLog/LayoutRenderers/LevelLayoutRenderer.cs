@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -33,23 +33,24 @@
 
 namespace NLog.LayoutRenderers
 {
-    using System.Diagnostics;
+    using System;
     using System.ComponentModel;
     using System.Text;
-    using System;
-
-    using Config;
+    using NLog.Config;
+    using NLog.Internal;
 
     /// <summary>
     /// The log level.
     /// </summary>
     [LayoutRenderer("level")]
     [ThreadAgnostic]
+    [ThreadSafe]
     public class LevelLayoutRenderer : LayoutRenderer
     {
         /// <summary>
         /// Gets or sets a value indicating the output format of the level.
         /// </summary>
+        /// <docgen category='Rendering Options' order='10' />
         [DefaultValue(LevelFormat.Name)]
         public LevelFormat Format { get; set; }
 
@@ -69,7 +70,7 @@ namespace NLog.LayoutRenderers
                     builder.Append(logEvent.Level.ToString()[0]);
                     break;
                 case LevelFormat.Ordinal:
-                    builder.Append(logEvent.Level.Ordinal);
+                    builder.AppendInvariant(logEvent.Level.Ordinal);
                     break;
             }
         }

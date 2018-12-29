@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -31,7 +31,7 @@
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-#if !SILVERLIGHT && !SILVERLIGHT4 && !NETSTANDARD1_5
+#if !SILVERLIGHT && !SILVERLIGHT4 && !NETSTANDARD1_0
 
 namespace NLog.LayoutRenderers
 {
@@ -39,11 +39,13 @@ namespace NLog.LayoutRenderers
     using System.Diagnostics;
     using System.Globalization;
     using System.Text;
+    using NLog.Config;
 
     /// <summary>
     /// A renderer that puts into log a System.Diagnostics trace correlation id.
     /// </summary>
     [LayoutRenderer("activityid")]
+    [ThreadSafe]
     public class TraceActivityIdLayoutRenderer : LayoutRenderer
     {
         /// <summary>
@@ -53,8 +55,9 @@ namespace NLog.LayoutRenderers
         /// <param name="logEvent">Logging event.</param>
         protected override void Append(StringBuilder builder, LogEventInfo logEvent)
         {
-            builder.Append(Guid.Empty.Equals(Trace.CorrelationManager.ActivityId) ?
-                String.Empty : Trace.CorrelationManager.ActivityId.ToString("D", CultureInfo.InvariantCulture));
+            var activityId = Trace.CorrelationManager.ActivityId;
+            builder.Append(Guid.Empty.Equals(activityId) ?
+                string.Empty : activityId.ToString("D", CultureInfo.InvariantCulture));
         }
     }
 }

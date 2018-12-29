@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -31,23 +31,21 @@
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-using System;
-
 namespace NLog.LayoutRenderers
 {
+    using System;
     using System.ComponentModel;
-    using System.Diagnostics;
     using System.IO;
-    using System.Reflection;
     using System.Text;
-    using Config;
-    using Internal;
+    using NLog.Config;
+    using NLog.Internal;
 
     /// <summary>
     /// The call site (class name, method name and source information).
     /// </summary>
     [LayoutRenderer("callsite")]
     [ThreadAgnostic]
+    [ThreadSafe]
     public class CallSiteLayoutRenderer : LayoutRenderer, IUsesStackTrace
     {
         /// <summary>
@@ -104,6 +102,7 @@ namespace NLog.LayoutRenderers
         /// <summary>
         /// Gets or sets the number of frames to skip.
         /// </summary>
+        /// <docgen category='Rendering Options' order='10' />
         [DefaultValue(0)]
         public int SkipFrames { get; set; }
 
@@ -178,7 +177,7 @@ namespace NLog.LayoutRenderers
                 if (FileName)
                 {
                     string fileName = logEvent.CallSiteInformation.GetCallerFilePath(SkipFrames);
-                    if (fileName != null)
+                    if (!string.IsNullOrEmpty(fileName))
                     {
                         int lineNumber = logEvent.CallSiteInformation.GetCallerLineNumber(SkipFrames);
                         AppendFileName(builder, fileName, lineNumber);
@@ -202,7 +201,7 @@ namespace NLog.LayoutRenderers
             }
 
             builder.Append(":");
-            builder.Append(lineNumber);
+            builder.AppendInvariant(lineNumber);
             builder.Append(")");
         }
 #endif

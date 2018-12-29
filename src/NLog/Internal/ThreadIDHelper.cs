@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -31,11 +31,11 @@
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-#if !SILVERLIGHT && !__IOS__
+#if !SILVERLIGHT && !__IOS__ && !NETSTANDARD1_3
 
 namespace NLog.Internal
 {
-    using Config;
+    using NLog.Config;
 
     /// <summary>
     /// Returns details about current process and thread in a portable manner.

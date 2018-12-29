@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -491,6 +491,15 @@ namespace NLog.UnitTests.Fluent
            .Message(GetCultureInfo("nl-nl"), "Message with {0} {1} {2} {3}", 4.1, 4.001, new DateTime(2016, 12, 31), true)
            .Write();
             AssertDebugLastMessage("t2", "Message with 4,1 4,001 31-12-2016 00:00:00 True");
+        }
+
+        [Fact]
+        public void LogBuilder_Structured_Logging_Test()
+        {
+            var logEvent = _logger.Info().Property("Property1Key", "Property1Value").Message("{@message}", "My custom message").LogEventInfo;
+            Assert.NotEmpty(logEvent.Properties);
+            Assert.Contains("message", logEvent.Properties.Keys);
+            Assert.Contains("Property1Key", logEvent.Properties.Keys);
         }
 
         ///<remarks>

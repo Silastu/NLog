@@ -1,5 +1,5 @@
 ﻿// 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -48,14 +48,14 @@ namespace NLog.Internal
         /// <summary>
         /// Cached directory separator char array to avoid memory allocation on each method call.
         /// </summary>
-        private readonly static char[] DirectorySeparatorChars = new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
+        private static readonly char[] DirectorySeparatorChars = new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
 
 #if !SILVERLIGHT || WINDOWS_PHONE
 
         /// <summary>
         /// Cached invalid filenames char array to avoid memory allocation everytime Path.GetInvalidFileNameChars() is called.
         /// </summary>
-        private readonly static HashSet<char> InvalidFileNameChars = new HashSet<char>(Path.GetInvalidFileNameChars());
+        private static readonly HashSet<char> InvalidFileNameChars = new HashSet<char>(Path.GetInvalidFileNameChars());
 
 #endif 
 
@@ -164,27 +164,21 @@ namespace NLog.Internal
 
             if (reusableBuilder != null)
             {
-                if (!_layout.ThreadAgnostic)
+                if (!_layout.ThreadAgnostic || _layout.MutableUnsafe)
                 {
-                    string cachedResult;
+                    object cachedResult;
                     if (logEvent.TryGetCachedLayoutValue(_layout, out cachedResult))
-                        return cachedResult;
+                    {
+                        return cachedResult?.ToString() ?? string.Empty;
+                    }
                 }
 
                 _layout.RenderAppendBuilder(logEvent, reusableBuilder);
 
-                if (_cachedPrevRawFileName != null && _cachedPrevRawFileName.Length == reusableBuilder.Length)
+                if (_cachedPrevRawFileName != null)
                 {
                     // If old filename matches the newly rendered, then no need to call StringBuilder.ToString()
-                    for (int i = 0; i < _cachedPrevRawFileName.Length; ++i)
-                    {
-                        if (_cachedPrevRawFileName[i] != reusableBuilder[i])
-                        {
-                            _cachedPrevRawFileName = null;
-                            break;
-                        }
-                    }
-                    if (_cachedPrevRawFileName != null)
+                    if (reusableBuilder.EqualTo(_cachedPrevRawFileName))
                         return _cachedPrevRawFileName;
                 }
 
@@ -277,8 +271,12 @@ namespace NLog.Internal
 
             //nb: ${basedir} has already been rewritten in the SimpleLayout.compile
             var path = isFixedText ? pathLayout.FixedText : pathLayout.Text;
+            return DetectFilePathKind(path, isFixedText);
+        }
 
-            if (path != null)
+        internal static FilePathKind DetectFilePathKind(string path, bool isFixedText = true)
+        {
+            if (!string.IsNullOrEmpty(path))
             {
                 path = path.TrimStart();
 
@@ -288,11 +286,11 @@ namespace NLog.Internal
                     var firstChar = path[0];
                     if (firstChar == Path.DirectorySeparatorChar || firstChar == Path.AltDirectorySeparatorChar)
                         return FilePathKind.Absolute;
+
                     if (firstChar == '.') //. and ..
                     {
                         return FilePathKind.Relative;
                     }
-
 
                     if (length >= 2)
                     {
@@ -300,14 +298,13 @@ namespace NLog.Internal
                         //on unix VolumeSeparatorChar == DirectorySeparatorChar
                         if (Path.VolumeSeparatorChar != Path.DirectorySeparatorChar && secondChar == Path.VolumeSeparatorChar)
                             return FilePathKind.Absolute;
-
                     }
+
                     if (!isFixedText && path.StartsWith("${", StringComparison.OrdinalIgnoreCase))
                     {
                         //if first part is a layout, then unknown
                         return FilePathKind.Unknown;
                     }
-
 
                     //not a layout renderer, but text
                     return FilePathKind.Relative;
@@ -346,7 +343,7 @@ namespace NLog.Internal
             if (fileNameChars != null)
             {
                 //keep the / in the dirname, because dirname could be c:/ and combine of c: and file name won't work well.
-                var dirName = lastDirSeparator > 0 ? filePath.Substring(0, lastDirSeparator + 1) : String.Empty;
+                var dirName = lastDirSeparator > 0 ? filePath.Substring(0, lastDirSeparator + 1) : string.Empty;
                 string fileName = new string(fileNameChars);
                 return Path.Combine(dirName, fileName);
             }

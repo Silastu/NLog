@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -42,7 +42,9 @@ namespace NLog.Targets
     /// <summary>
     /// Line ending mode.
     /// </summary>
+#if !NETSTANDARD1_3
     [TypeConverter(typeof(LineEndingModeConverter))]
+#endif
     public sealed class LineEndingMode : IEquatable<LineEndingMode>
     {
         /// <summary>
@@ -73,7 +75,7 @@ namespace NLog.Targets
         /// Do not insert any line ending.
         /// </summary>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Security", "CA2104:DoNotDeclareReadOnlyMutableReferenceTypes", Justification = "Type is immutable")]
-        public static readonly LineEndingMode None = new LineEndingMode("None", String.Empty);
+        public static readonly LineEndingMode None = new LineEndingMode("None", string.Empty);
 
 
         private readonly string _name;
@@ -114,7 +116,7 @@ namespace NLog.Targets
         /// <exception cref="ArgumentOutOfRangeException">There is no line ending mode with the specified name.</exception>
         public static LineEndingMode FromString([NotNull] string name)
         {
-            if (name == null) throw new ArgumentNullException("name");
+            if (name == null) throw new ArgumentNullException(nameof(name));
 
             if (name.Equals(CRLF.Name, StringComparison.OrdinalIgnoreCase)) return CRLF;
             if (name.Equals(LF.Name, StringComparison.OrdinalIgnoreCase)) return LF;
@@ -123,7 +125,7 @@ namespace NLog.Targets
             if (name.Equals(None.Name, StringComparison.OrdinalIgnoreCase)) return None;
 
 #if !SILVERLIGHT
-            throw new ArgumentOutOfRangeException("name", name, "LineEndingMode is out of range");
+            throw new ArgumentOutOfRangeException(nameof(name), name, "LineEndingMode is out of range");
 #else
             throw new ArgumentOutOfRangeException("name", "LineEndingMode is out of range");
 #endif
@@ -211,7 +213,7 @@ namespace NLog.Targets
         {
             if (ReferenceEquals(null, obj)) return false;
             if (ReferenceEquals(this, obj)) return true;
-            return obj is LineEndingMode && Equals((LineEndingMode) obj);
+            return obj is LineEndingMode mode && Equals(mode);
         }
 
         /// <summary>Indicates whether the current object is equal to another object of the same type.</summary>
@@ -224,7 +226,7 @@ namespace NLog.Targets
             return string.Equals(_newLineCharacters, other._newLineCharacters);
         }
 
-
+#if !NETSTANDARD1_3
         /// <summary>
         /// Provides a type converter to convert <see cref="LineEndingMode"/> objects to and from other representations.
         /// </summary>
@@ -255,6 +257,6 @@ namespace NLog.Targets
                 return name != null ? FromString(name) : base.ConvertFrom(context, culture, value);
             }
         }
-
+#endif
     }
 }

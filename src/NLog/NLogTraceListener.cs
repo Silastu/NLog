@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -31,7 +31,7 @@
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-#if !SILVERLIGHT && !__IOS__&& !__ANDROID__ && !NETSTANDARD1_5
+#if !SILVERLIGHT && !__IOS__&& !__ANDROID__ && !NETSTANDARD1_0
 
 namespace NLog
 {
@@ -48,7 +48,6 @@ namespace NLog
     /// </summary>
     public class NLogTraceListener : TraceListener
     {
-        private static readonly Assembly systemAssembly = typeof(Trace).Assembly;
         private LogFactory _logFactory;
         private LogLevel _defaultLogLevel = LogLevel.Debug;
         private bool _attributesLoaded;
@@ -76,8 +75,8 @@ namespace NLog
 
             set
             {
-                _attributesLoaded = true;
                 _logFactory = value;
+                _attributesLoaded = true;                
             }
         }
 
@@ -94,8 +93,8 @@ namespace NLog
 
             set
             {
-                _attributesLoaded = true;
                 _defaultLogLevel = value;
+                _attributesLoaded = true;
             }
         }
 
@@ -112,8 +111,8 @@ namespace NLog
 
             set
             {
-                _attributesLoaded = true;
                 _forceLogLevel = value;
+                _attributesLoaded = true;
             }
         }
 
@@ -130,8 +129,8 @@ namespace NLog
 
             set
             {
-                _attributesLoaded = true;
                 _disableFlush = value;
+                _attributesLoaded = true;
             }
         }
 
@@ -155,8 +154,8 @@ namespace NLog
 
             set
             {
-                _attributesLoaded = true;
                 _autoLoggerName = value;
+                _attributesLoaded = true;
             }
         }
 
@@ -391,35 +390,14 @@ namespace NLog
             if (AutoLoggerName)
             {
                 stackTrace = new StackTrace();
-                MethodBase userMethod = null;
-
                 for (int i = 0; i < stackTrace.FrameCount; ++i)
                 {
                     var frame = stackTrace.GetFrame(i);
-                    var method = frame.GetMethod();
-
-                    if (method.DeclaringType == GetType())
+                    loggerName = Internal.StackTraceUsageUtils.LookupClassNameFromStackFrame(frame);
+                    if (!string.IsNullOrEmpty(loggerName))
                     {
-                        // skip all methods of this type
-                        continue;
-                    }
-
-                    if (method.DeclaringType != null && method.DeclaringType.Assembly == systemAssembly)
-                    {
-                        // skip all methods from System.dll
-                        continue;
-                    }
-
-                    userFrameIndex = i;
-                    userMethod = method;
-                    break;
-                }
-
-                if (userFrameIndex >= 0)
-                {
-                    if (userMethod != null && userMethod.DeclaringType != null)
-                    {
-                        loggerName = userMethod.DeclaringType.FullName;
+                        userFrameIndex = i;
+                        break;
                     }
                 }
             }
@@ -503,7 +481,7 @@ namespace NLog
                             break;
 
                         case "DISABLEFLUSH":
-                            _disableFlush = Boolean.Parse(value);
+                            _disableFlush = bool.Parse(value);
                             break;
                     }
                 }

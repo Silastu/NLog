@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -35,7 +35,6 @@ namespace NLog.Layouts
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using System.ComponentModel;
     using System.Globalization;
     using System.Text;
@@ -47,6 +46,7 @@ namespace NLog.Layouts
     /// <remarks>If <see cref="LayoutWithHeaderAndFooter.Header"/> is set, then the header generation with columnnames will be disabled.</remarks>
     [Layout("CsvLayout")]
     [ThreadAgnostic]
+    [ThreadSafe]
     [AppDomainFixedOutput]
     public class CsvLayout : LayoutWithHeaderAndFooter
     {
@@ -154,6 +154,11 @@ namespace NLog.Layouts
 
             _quotableCharacters = (QuoteChar + "\r\n" + _actualColumnDelimiter).ToCharArray();
             _doubleQuoteChar = QuoteChar + QuoteChar;
+        }
+
+        internal override void PrecalculateBuilder(LogEventInfo logEvent, StringBuilder target)
+        {
+            PrecalculateBuilderInternal(logEvent, target);
         }
 
         /// <summary>
@@ -271,7 +276,7 @@ namespace NLog.Layouts
         [ThreadAgnostic]
         private class CsvHeaderLayout : Layout
         {
-            private CsvLayout _parent;
+            private readonly CsvLayout _parent;
 
             /// <summary>
             /// Initializes a new instance of the <see cref="CsvHeaderLayout"/> class.
@@ -280,6 +285,11 @@ namespace NLog.Layouts
             public CsvHeaderLayout(CsvLayout parent)
             {
                 _parent = parent;
+            }
+
+            internal override void PrecalculateBuilder(LogEventInfo logEvent, StringBuilder target)
+            {
+                PrecalculateBuilderInternal(logEvent, target);
             }
 
             /// <summary>

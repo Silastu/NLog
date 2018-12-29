@@ -1,5 +1,5 @@
 ﻿// 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -43,7 +43,9 @@ namespace NLog.UnitTests.Filters
         {
             LogManager.Configuration = CreateConfigurationFromString(@"
             <nlog>
-                <targets><target name='debug' type='Debug' layout='${message}' /></targets>
+                <targets>
+                    <target name='debug' type='Debug' layout='${message}' />
+                </targets>
                 <rules>
                     <logger name='*' minlevel='Debug' writeTo='debug'>
                     <filters>
@@ -60,6 +62,36 @@ namespace NLog.UnitTests.Filters
             AssertDebugCounter("debug", 2);
             logger.Debug("zzz");
             AssertDebugCounter("debug", 2);
+        }
+
+        [Fact]
+        public void WhenRepeatedIgnoreDualTargetTest()
+        {
+            LogManager.Configuration = CreateConfigurationFromString(@"
+            <nlog>
+                <targets>
+                    <target name='debug' type='Debug' layout='${message}' />
+                    <target name='debug2' type='Debug' layout='${message}' />
+                </targets>
+                <rules>
+                    <logger name='*' minlevel='Debug' writeTo='debug,debug2'>
+                    <filters>
+                        <whenRepeated layout='${message}' action='Ignore' />
+                    </filters>
+                    </logger>
+                </rules>
+            </nlog>");
+
+            ILogger logger = LogManager.GetLogger("A");
+            logger.Debug("a");
+            AssertDebugCounter("debug", 1);
+            AssertDebugCounter("debug2", 1);
+            logger.Debug("zzz");
+            AssertDebugCounter("debug", 2);
+            AssertDebugCounter("debug2", 2);
+            logger.Debug("zzz");
+            AssertDebugCounter("debug", 2);
+            AssertDebugCounter("debug2", 2);
         }
 
         [Fact]

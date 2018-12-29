@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -31,20 +31,18 @@
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-#if !SILVERLIGHT && !__IOS__ && !__ANDROID__ && !NETSTANDARD
+#if !SILVERLIGHT && !__IOS__ && !__ANDROID__ && (!NETSTANDARD || WindowsEventLogPackage)
 
 namespace NLog.Targets
 {
     using System;
     using System.ComponentModel;
     using System.Diagnostics;
-    using System.Globalization;
-    using System.Security;
     using Internal.Fakeables;
-    using Common;
-    using Config;
-    using Internal;
-    using Layouts;
+    using NLog.Common;
+    using NLog.Config;
+    using NLog.Internal;
+    using NLog.Layouts;
 
     /// <summary>
     /// Writes log message to the Event Log.
@@ -87,14 +85,14 @@ namespace NLog.Targets
             Log = "Application";
             MachineName = ".";
             MaxMessageLength = 16384;
-            OptimizeBufferReuse = GetType() == typeof(EventLogTarget);
+            OptimizeBufferReuse = GetType() == typeof(EventLogTarget);  // Class not sealed, reduce breaking changes
         }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="EventLogTarget"/> class.
         /// </summary>
         /// <param name="name">Name of the target.</param>
-        public EventLogTarget(string name) 
+        public EventLogTarget(string name)
             : this(LogFactory.CurrentAppDomain)
         {
             Name = name;
@@ -122,6 +120,7 @@ namespace NLog.Targets
         /// <summary>
         /// Optional entrytype. When not set, or when not convertable to <see cref="EventLogEntryType"/> then determined by <see cref="NLog.LogLevel"/>
         /// </summary>
+        /// <docgen category='Event Log Options' order='10' />
         public Layout EntryType { get; set; }
 
         /// <summary>
@@ -141,12 +140,11 @@ namespace NLog.Targets
         [DefaultValue("Application")]
         public string Log { get; set; }
 
-        private int maxMessageLength;
-        
         /// <summary>
         /// Gets or sets the message length limit to write to the Event Log.
         /// </summary>
         /// <remarks><value>MaxMessageLength</value> cannot be zero or negative</remarks>
+        /// <docgen category='Event Log Options' order='10' />
         [DefaultValue(16384)]
         public int MaxMessageLength
         {
@@ -159,9 +157,7 @@ namespace NLog.Targets
                 maxMessageLength = value;
             }
         }
-
-              
-        private long? maxKilobytes;
+        private int maxMessageLength;
 
         /// <summary>
         /// Gets or sets the maximum Event log size in kilobytes.
@@ -171,6 +167,7 @@ namespace NLog.Targets
         /// Default is 512 Kilobytes as specified by Eventlog API
         /// </summary>
         /// <remarks><value>MaxKilobytes</value> cannot be less than 64 or greater than 4194240 or not a multiple of 64. If <c>null</c>, use the default value</remarks>
+        /// <docgen category='Event Log Options' order='10' />
         [DefaultValue(null)]
         public long? MaxKilobytes
         {
@@ -182,6 +179,7 @@ namespace NLog.Targets
                 maxKilobytes = value;
             }
         }
+        private long? maxKilobytes;
 
         /// <summary>
         /// Gets or sets the action to take if the message is larger than the <see cref="MaxMessageLength"/> option.
@@ -212,7 +210,7 @@ namespace NLog.Targets
 
             if (string.IsNullOrEmpty(fixedSource))
             {
-                InternalLogger.Debug("Skipping removing of event source because it contains layout renderers");
+                InternalLogger.Debug("EventLogTarget(Name={0}): Skipping removing of event source because it contains layout renderers", Name);
             }
             else
             {
@@ -235,7 +233,7 @@ namespace NLog.Targets
             {
                 return EventLog.SourceExists(fixedSource, MachineName);
             }
-            InternalLogger.Debug("Unclear if event source exists because it contains layout renderers");
+            InternalLogger.Debug("EventLogTarget(Name={0}): Unclear if event source exists because it contains layout renderers", Name);
             return null; //unclear! 
         }
 
@@ -250,7 +248,7 @@ namespace NLog.Targets
 
             if (string.IsNullOrEmpty(fixedSource))
             {
-                InternalLogger.Debug("Skipping creation of event source because it contains layout renderers");
+                InternalLogger.Debug("EventLogTarget(Name={0}): Skipping creation of event source because it contains layout renderers", Name);
             }
             else
             {
@@ -272,11 +270,19 @@ namespace NLog.Targets
 
             EventLogEntryType entryType = GetEntryType(logEvent);
 
-            int eventId = EventId.RenderInt(logEvent, 0, "EventLogTarget.EventId");
+            int eventId = 0;
+            string renderEventId = RenderLogEvent(EventId, logEvent);
+            if (!string.IsNullOrEmpty(renderEventId) && !int.TryParse(renderEventId, out eventId))
+            {
+                InternalLogger.Warn("EventLogTarget(Name={0}): WriteEntry failed to parse EventId={1}", Name, renderEventId);
+            }
 
-            short category = Category.RenderShort(logEvent, 0, "EventLogTarget.Category");
-
-          
+            short category = 0;
+            string renderCategory = RenderLogEvent(Category, logEvent);
+            if (!string.IsNullOrEmpty(renderCategory) && !short.TryParse(renderCategory, out category))
+            {
+                InternalLogger.Warn("EventLogTarget(Name={0}): WriteEntry failed to parse Category={1}", Name, renderCategory);
+            }
 
             // limitation of EventLog API
             if (message.Length > MaxMessageLength)
@@ -319,17 +325,15 @@ namespace NLog.Targets
         /// <returns></returns>
         private EventLogEntryType GetEntryType(LogEventInfo logEvent)
         {
-            if (EntryType != null)
+            string renderEntryType = RenderLogEvent(EntryType, logEvent);
+            if (!string.IsNullOrEmpty(renderEntryType))
             {
                 //try parse, if fail,  determine auto
-
-                var value = RenderLogEvent(EntryType, logEvent);
-
-                EventLogEntryType eventLogEntryType;
-                if (EnumHelpers.TryParse(value, true, out eventLogEntryType))
+                if (ConversionHelpers.TryParseEnum(renderEntryType, out EventLogEntryType eventLogEntryType))
                 {
                     return eventLogEntryType;
                 }
+                InternalLogger.Warn("EventLogTarget(Name={0}): WriteEntry failed to parse EntryType={1}", Name, renderEntryType);
             }
 
             // determine auto
@@ -399,13 +403,11 @@ namespace NLog.Targets
         /// <param name="alwaysThrowError">always throw an Exception when there is an error</param>
         private void CreateEventSourceIfNeeded(string fixedSource, bool alwaysThrowError)
         {
-
             if (string.IsNullOrEmpty(fixedSource))
             {
-                InternalLogger.Debug("Skipping creation of event source because it contains layout renderers");
+                InternalLogger.Debug("EventLogTarget(Name={0}): Skipping creation of event source because it contains layout renderers", Name);
                 //we can only create event sources if the source is fixed (no layout)
                 return;
-
             }
 
             // if we throw anywhere, we remain non-operational
@@ -438,12 +440,11 @@ namespace NLog.Targets
             }
             catch (Exception exception)
             {
-                InternalLogger.Error(exception, "Error when connecting to EventLog.");
-                if (alwaysThrowError || exception.MustBeRethrown())
+                InternalLogger.Error(exception, "EventLogTarget(Name={0}): Error when connecting to EventLog.", Name);
+                if (alwaysThrowError || LogManager.ThrowExceptions)
                 {
                     throw;
                 }
-
             }
         }
     }

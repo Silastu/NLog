@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -432,6 +432,7 @@ namespace NLog.UnitTests.LayoutRenderers
             Assert.StartsWith("{\"Message\":\"Wrapper2\"", lastMessage1);
             Assert.Contains("\"InnerException\":{\"Message\":\"Wrapper1\"", lastMessage1);
             Assert.Contains("\"ParamName\":\"exceptionMessage\"", lastMessage1);
+            Assert.Contains("1Really_Bad_Boy_", lastMessage1);
 
 #pragma warning restore 0618
 
@@ -440,6 +441,7 @@ namespace NLog.UnitTests.LayoutRenderers
             Assert.StartsWith("{\"Message\":\"Wrapper2\"", lastMessage2);
             Assert.Contains("\"InnerException\":{\"Message\":\"Wrapper1\"", lastMessage2);
             Assert.Contains("\"ParamName\":\"exceptionMessage\"", lastMessage2);
+            Assert.Contains("1Really_Bad_Boy_", lastMessage1);
         }
 
         [Fact]
@@ -653,6 +655,7 @@ namespace NLog.UnitTests.LayoutRenderers
             }
             catch (Exception ex)
             {
+                ex.Data["1Really.Bad-Boy!"] = "Hello World";
                 return ex;
             }
         }
@@ -682,9 +685,12 @@ namespace NLog.UnitTests.LayoutRenderers
                 :base(message)
             {
                 ParamName = paramName;
+                StrangeProperty = "Strange World";
             }
 
             public string ParamName { get; }
+
+            public string StrangeProperty { private get; set; }
         }
 
         [Fact]

@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -33,13 +33,14 @@
 
 namespace NLog.Layouts
 {
-    using Config;
+    using NLog.Config;
 
     /// <summary>
     /// A column in the CSV.
     /// </summary>
     [NLogConfigurationItem]
     [ThreadAgnostic]
+    [ThreadSafe]
     public class CsvColumn 
     {
         /// <summary>

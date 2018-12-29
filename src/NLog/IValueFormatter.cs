@@ -1,5 +1,5 @@
 ﻿// 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -33,42 +33,24 @@
 
 using System;
 using System.Text;
+using NLog.MessageTemplates;
 
 namespace NLog
 {
     /// <summary>
-    /// Interface for serialization of object values into string format
+    /// Render a message template property to a string
     /// </summary>
-    public interface IValueSerializer
+    public interface IValueFormatter
     {
         /// <summary>
-        /// Serialization of an object into JSON format (or other destructure format)
+        /// Serialization of an object, e.g. JSON and append to <paramref name="builder"/>
         /// </summary>
         /// <param name="value">The object to serialize to string.</param>
-        /// <param name="format">The format string for the object</param>
+        /// <param name="format">Parameter Format</param>
+        /// <param name="captureType">Parameter CaptureType</param>
         /// <param name="formatProvider">An object that supplies culture-specific formatting information.</param>
         /// <param name="builder">Output destination.</param>
         /// <returns>Serialize succeeded (true/false)</returns>
-        bool SerializeObject(object value, string format, IFormatProvider formatProvider, StringBuilder builder);
-
-        /// <summary>
-        /// Convert object into into quoted string value
-        /// </summary>
-        /// <param name="value">The object to serialize to string.</param>
-        /// <param name="format">The format string for the object</param>
-        /// <param name="formatProvider">An object that supplies culture-specific formatting information.</param>
-        /// <param name="builder">Output destination.</param>
-        /// <returns>Stringify succeeded (true/false)</returns>
-        bool StringifyObject(object value, string format, IFormatProvider formatProvider, StringBuilder builder);
-
-        /// <summary>
-        /// Format object into into string value
-        /// </summary>
-        /// <param name="value">The object to serialize to string.</param>
-        /// <param name="format">The format string for the object</param>
-        /// <param name="formatProvider">An object that supplies culture-specific formatting information.</param>
-        /// <param name="builder">Output destination.</param>
-        /// <returns>Formating succeeded (true/false)</returns>
-        bool FormatObject(object value, string format, IFormatProvider formatProvider, StringBuilder builder);
+        bool FormatValue(object value, string format, CaptureType captureType, IFormatProvider formatProvider, StringBuilder builder);
     }
 }

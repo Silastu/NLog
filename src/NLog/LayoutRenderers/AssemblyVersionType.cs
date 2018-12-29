@@ -1,5 +1,5 @@
 ﻿// 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -31,27 +31,26 @@
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-using System.Collections.Generic;
-
-namespace NLog.MessageTemplates
+namespace NLog.LayoutRenderers
 {
     /// <summary>
-    /// Parameters extracted from parsing <see cref="LogEventInfo.Message"/> as MessageTemplate
+    /// Type of assembly version to retrieve.
     /// </summary>
-    public interface IMessageTemplateParameters : IEnumerable<MessageTemplateParameter>
+    public enum AssemblyVersionType
     {
         /// <summary>
-        /// Number of parameters
+        /// Gets the assembly version.
         /// </summary>
-        int Count { get; }
+        Assembly,
 
         /// <summary>
-        /// Gets the parameters at the given index
+        /// Gets the file version.
         /// </summary>
-        MessageTemplateParameter this[int index] { get; }
+        File,
 
-        /// <summary>Indicates whether the template should be interpreted as positional 
-        /// (all holes are numbers) or named.</summary>
-        bool IsPositional { get; }
+        /// <summary>
+        /// Gets additional version information.
+        /// </summary>
+        Informational
     }
 }

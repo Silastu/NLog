@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -36,8 +36,8 @@ namespace NLog.LayoutRenderers
     using System.IO;
     using System.Text;
 
-    using Config;
-    using Internal;
+    using NLog.Config;
+    using NLog.Internal;
 
     /// <summary>
     /// A temporary directory.
@@ -45,6 +45,7 @@ namespace NLog.LayoutRenderers
     [LayoutRenderer("tempdir")]
     [AppDomainFixedOutput]
     [ThreadAgnostic]
+    [ThreadSafe]
     public class TempDirLayoutRenderer : LayoutRenderer
     {
         private static string tempDir = Path.GetTempPath();

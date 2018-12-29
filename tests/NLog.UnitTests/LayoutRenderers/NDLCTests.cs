@@ -1,5 +1,5 @@
 ﻿// 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -365,6 +365,28 @@ namespace NLog.UnitTests.LayoutRenderers
 
             LogManager.GetLogger("A").Debug("0");
             AssertDebugLastMessage("debug", "|||||0");
+        }
+
+        [Fact]
+        public void NDLCAsyncLogging()
+        {
+            LogManager.Configuration = CreateConfigurationFromString(@"
+            <nlog>
+                <targets><target name='debug' type='Debug' layout='${ndlc:separator=\:} ${message}' /></targets>
+                <rules>
+                    <logger name='*' minlevel='Debug' writeTo='debug' />
+                </rules>
+            </nlog>");
+
+            System.Threading.Tasks.Task task;
+            using (NestedDiagnosticsLogicalContext.Push("ala"))
+            {
+                LogManager.GetLogger("A").Debug("a");
+                AssertDebugLastMessage("debug", "ala a");
+                task = System.Threading.Tasks.Task.Run(async () => { await System.Threading.Tasks.Task.Delay(50); LogManager.GetLogger("B").Debug("b"); });
+            }
+            task.Wait();
+            AssertDebugLastMessage("debug", "ala b");
         }
     }
 }

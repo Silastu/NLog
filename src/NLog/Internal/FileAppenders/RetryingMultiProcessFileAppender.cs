@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -67,11 +67,6 @@ namespace NLog.Internal.FileAppenders
             {
                 fileStream.Write(bytes, offset, count);
             }
-
-            if (CaptureLastWriteTime)
-            {
-                FileTouched();
-            }
         }
 
         /// <summary>
@@ -101,21 +96,6 @@ namespace NLog.Internal.FileAppenders
             if (fileInfo.Exists)
             {
                 return fileInfo.GetCreationTimeUtc();
-            }
-            return null;
-        }
-
-        /// <summary>
-        /// Gets the last time the file associated with the appeander is written. The time returned is in Coordinated 
-        /// Universal Time [UTC] standard.
-        /// </summary>
-        /// <returns>The time the file was last written to.</returns>
-        public override DateTime? GetFileLastWriteTimeUtc()
-        {
-            FileInfo fileInfo = new FileInfo(FileName);
-            if (fileInfo.Exists)
-            {
-                return fileInfo.GetLastWriteTimeUtc();
             }
             return null;
         }

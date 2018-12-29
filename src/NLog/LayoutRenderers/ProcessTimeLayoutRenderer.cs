@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -31,22 +31,30 @@
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-using System.Globalization;
-
 namespace NLog.LayoutRenderers
 {
     using System;
+    using System.ComponentModel;
+    using System.Globalization;
     using System.Text;
-
-    using Config;
+    using NLog.Config;
+    using NLog.Internal;
 
     /// <summary>
     /// The process time in format HH:mm:ss.mmm.
     /// </summary>
     [LayoutRenderer("processtime")]
     [ThreadAgnostic]
+    [ThreadSafe]
     public class ProcessTimeLayoutRenderer : LayoutRenderer
     {
+        /// <summary>
+        /// Gets or sets a value indicating whether to output in culture invariant format
+        /// </summary>
+        /// <docgen category='Rendering Options' order='10' />
+        [DefaultValue(false)]
+        public bool Invariant { get; set; }
+
         /// <summary>
         /// Renders the current process running time and appends it to the specified <see cref="StringBuilder" />.
         /// </summary>
@@ -55,7 +63,7 @@ namespace NLog.LayoutRenderers
         protected override void Append(StringBuilder builder, LogEventInfo logEvent)
         {
             TimeSpan ts = logEvent.TimeStamp.ToUniversalTime() - LogEventInfo.ZeroDate;
-            var culture = GetCulture(logEvent);
+            var culture = Invariant ? null : GetCulture(logEvent);
             WritetTimestamp(builder, ts, culture);
         }
 
@@ -67,68 +75,41 @@ namespace NLog.LayoutRenderers
         /// <param name="culture"></param>
         internal static void WritetTimestamp(StringBuilder builder, TimeSpan ts, CultureInfo culture)
         {
-          
-            string timeSeparator;
-            string ticksSeparator;
+            string timeSeparator = ":";
+            string ticksSeparator = ".";
             if (culture != null)
             {
-#if !SILVERLIGHT && !NETSTANDARD1_5
+#if !SILVERLIGHT && !NETSTANDARD1_0
                 timeSeparator = culture.DateTimeFormat.TimeSeparator;
-#else
-                timeSeparator = ":"; 
 #endif
                 ticksSeparator = culture.NumberFormat.NumberDecimalSeparator;
             }
-            else
-            {
-                timeSeparator = ":";
-                ticksSeparator = ".";
-            }
 
-
-            if (ts.Hours < 10)
-            {
-                builder.Append('0');
-            }
-
-            builder.Append(ts.Hours);
-            
+            builder.Append2DigitsZeroPadded(ts.Hours);
             builder.Append(timeSeparator);
-            if (ts.Minutes < 10)
-            {
-                builder.Append('0');
-            }
-
-            builder.Append(ts.Minutes);
+            builder.Append2DigitsZeroPadded(ts.Minutes);
             builder.Append(timeSeparator);
-            if (ts.Seconds < 10)
-            {
-                builder.Append('0');
-            }
-
-            builder.Append(ts.Seconds);
-          
+            builder.Append2DigitsZeroPadded(ts.Seconds);
             builder.Append(ticksSeparator);
-
-            if (ts.Milliseconds < 100)
+            int milliseconds = ts.Milliseconds;
+            if (milliseconds < 100)
             {
                 builder.Append('0');
 
-                if (ts.Milliseconds < 10)
+                if (milliseconds < 10)
                 {
                     builder.Append('0');
 
-                    if (ts.Milliseconds < 0)
+                    if (milliseconds < 0)
                     {
                         //don't write negative times. This is probably an accuracy problem (accuracy is by default 16ms, see https://github.com/NLog/NLog/wiki/Time-Source)
                         builder.Append('0');
                         return;
-                        
                     }
                 }
             }
 
-            builder.Append(ts.Milliseconds);
+            builder.AppendInvariant(milliseconds);
         }
     }
 }

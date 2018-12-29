@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -35,7 +35,6 @@ namespace NLog.Layouts
 {
     using System;
     using System.Collections.ObjectModel;
-    using System.Linq;
     using System.Text;
     using NLog.Common;
     using NLog.Config;
@@ -51,12 +50,13 @@ namespace NLog.Layouts
     /// </remarks>
     [Layout("SimpleLayout")]
     [ThreadAgnostic]
+    [ThreadSafe]
     [AppDomainFixedOutput]
     public class SimpleLayout : Layout, IUsesStackTrace
     {
         private string _fixedText;
         private string _layoutText;
-        private ConfigurationItemFactory _configurationItemFactory;
+        private readonly ConfigurationItemFactory _configurationItemFactory;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SimpleLayout" /> class.
@@ -222,9 +222,9 @@ namespace NLog.Layouts
         {
             Renderers = new ReadOnlyCollection<LayoutRenderer>(renderers);
 
-            if (Renderers.Count == 1 && Renderers[0] is LiteralLayoutRenderer)
+            if (Renderers.Count == 1 && Renderers[0] is LiteralLayoutRenderer renderer)
             {
-                _fixedText = ((LiteralLayoutRenderer)Renderers[0]).Text;
+                _fixedText = renderer.Text;
             }
             else
             {
@@ -270,6 +270,11 @@ namespace NLog.Layouts
             }
 
             base.InitializeLayout();
+        }
+
+        internal override void PrecalculateBuilder(LogEventInfo logEvent, StringBuilder target)
+        {
+            PrecalculateBuilderInternal(logEvent, target);
         }
 
         /// <summary>

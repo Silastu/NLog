@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -46,7 +46,7 @@ namespace NLog.Config
     /// </summary>
     public sealed class InstallationContext : IDisposable
     {
-#if !SILVERLIGHT
+#if !SILVERLIGHT && !NETSTANDARD1_3
         /// <summary>
         /// Mapping between log levels and console output colors.
         /// </summary>
@@ -195,7 +195,7 @@ namespace NLog.Config
                     message = string.Format(CultureInfo.InvariantCulture, message, arguments);
                 }
 
-#if !SILVERLIGHT && !__IOS__ && !__ANDROID__
+#if !SILVERLIGHT && !__IOS__ && !__ANDROID__ && !NETSTANDARD1_3
                 var oldColor = Console.ForegroundColor;
                 Console.ForegroundColor = logLevel2ConsoleColor[logLevel];
 

@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -35,7 +35,6 @@
 
 using System;
 using System.ComponentModel;
-using System.Linq;
 using System.Text;
 using NLog.Config;
 using NLog.Internal.Fakeables;
@@ -45,7 +44,9 @@ namespace NLog.LayoutRenderers
     /// <summary>
     ///  Used to render the application domain name.
     ///  </summary>
-    [ThreadAgnostic, LayoutRenderer("appdomain")]
+    [LayoutRenderer("appdomain")]
+    [ThreadAgnostic]
+    [ThreadSafe]
     public class AppDomainLayoutRenderer : LayoutRenderer
     {
         private const string ShortFormat = "{0:00}";
@@ -77,9 +78,30 @@ namespace NLog.LayoutRenderers
         /// The first parameter is the  <see cref="IAppDomain.Id"/>, the second the second the  <see cref="IAppDomain.FriendlyName"/>
         /// This string is used in <see cref="string.Format(string,object[])"/>
         /// </summary>
+        /// <docgen category='Rendering Options' order='10' />
         [DefaultParameter]
         [DefaultValue(LongFormatCode)]
         public string Format { get; set; }
+
+        /// <summary>
+        /// Initializes the layout renderer.
+        /// </summary>
+        protected override void InitializeLayoutRenderer()
+        {
+            _assemblyName = null;
+            base.InitializeLayoutRenderer();
+        }
+
+        /// <summary>
+        /// Closes the layout renderer.
+        /// </summary>
+        protected override void CloseLayoutRenderer()
+        {
+            _assemblyName = null;
+            base.CloseLayoutRenderer();
+        }
+
+        private string _assemblyName;
 
         /// <summary>
         /// Render the layout
@@ -88,8 +110,12 @@ namespace NLog.LayoutRenderers
         /// <param name="logEvent"></param>
         protected override void Append(StringBuilder builder, LogEventInfo logEvent)
         {
-            var formattingString = GetFormattingString(Format);
-            builder.Append(string.Format(formattingString, _currentDomain.Id, _currentDomain.FriendlyName));
+            if (_assemblyName == null)
+            {
+                var formattingString = GetFormattingString(Format);
+                _assemblyName = string.Format(formattingString, _currentDomain.Id, _currentDomain.FriendlyName);
+            }
+            builder.Append(_assemblyName);
         }
 
         /// <summary>
@@ -110,7 +136,7 @@ namespace NLog.LayoutRenderers
             }
             else
             {
-                //custom value;
+                //custom format string
                 formattingString = format;
             }
             return formattingString;

@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -31,23 +31,20 @@
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-using System.Globalization;
-using NLog.Internal;
-
 namespace NLog.LayoutRenderers
 {
     using System;
     using System.ComponentModel;
-    using System.Diagnostics;
     using System.Text;
-
-    using Config;
+    using NLog.Config;
+    using NLog.Internal;
 
     /// <summary>
-    /// The time in a 24-hour, sortable format HH:mm:ss.mmm.
+    /// The time in a 24-hour, sortable format HH:mm:ss.mmmm.
     /// </summary>
     [LayoutRenderer("time")]
     [ThreadAgnostic]
+    [ThreadSafe]
     public class TimeLayoutRenderer : LayoutRenderer
     {
         /// <summary>
@@ -56,6 +53,13 @@ namespace NLog.LayoutRenderers
         /// <docgen category='Rendering Options' order='10' />
         [DefaultValue(false)]
         public bool UniversalTime { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to output in culture invariant format
+        /// </summary>
+        /// <docgen category='Rendering Options' order='10' />
+        [DefaultValue(false)]
+        public bool Invariant { get; set; }
 
         /// <summary>
         /// Renders time in the 24-h format (HH:mm:ss.mmm) and appends it to the specified <see cref="StringBuilder" />.
@@ -69,24 +73,19 @@ namespace NLog.LayoutRenderers
             {
                 dt = dt.ToUniversalTime();
             }
-            
-            var culture = GetCulture(logEvent);
 
-            string timeSeparator;
-            string ticksSeparator;
-            if (culture != null)
+            string timeSeparator = ":";
+            string ticksSeparator = ".";
+            if (!Invariant)
             {
-#if !SILVERLIGHT && !NETSTANDARD1_5
-                timeSeparator = culture.DateTimeFormat.TimeSeparator;
-#else
-                timeSeparator = ":";
+                var culture = GetCulture(logEvent);
+                if (culture != null)
+                {
+#if !SILVERLIGHT && !NETSTANDARD1_0
+                    timeSeparator = culture.DateTimeFormat.TimeSeparator;
 #endif
-                ticksSeparator = culture.NumberFormat.NumberDecimalSeparator;
-            }
-            else
-            {
-                timeSeparator = ":";
-                ticksSeparator = ".";
+                    ticksSeparator = culture.NumberFormat.NumberDecimalSeparator;
+                }
             }
 
             builder.Append2DigitsZeroPadded(dt.Hour);

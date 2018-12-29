@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -170,7 +170,7 @@ namespace NLog.Internal.NetworkSenders
 
                 default:
                     {
-#if NETSTANDARD1_5
+#if NETSTANDARD1_0
                         var addresses = Dns.GetHostAddressesAsync(uri.Host).Result;
 #else
                         var addresses = Dns.GetHostEntry(uri.Host).AddressList;

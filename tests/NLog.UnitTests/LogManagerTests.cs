@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -38,6 +38,7 @@ namespace NLog.UnitTests
     using System;
     using System.Collections.Generic;
     using System.IO;
+    using System.Linq;
     using Xunit;
     using NLog.Common;
     using NLog.Config;
@@ -519,8 +520,8 @@ namespace NLog.UnitTests
         [Fact]
         public void ThreadSafe_getCurrentClassLogger_test()
         {
-            MemoryQueueTarget mTarget = new MemoryQueueTarget(1000);
-            MemoryQueueTarget mTarget2 = new MemoryQueueTarget(1000);
+            MemoryQueueTarget mTarget = new MemoryQueueTarget(1000) { Name = "memory" };
+            MemoryQueueTarget mTarget2 = new MemoryQueueTarget(1000) { Name = "memory2" };
 
             var task1 = Task.Run(() =>
             {
@@ -528,8 +529,8 @@ namespace NLog.UnitTests
                 LogManager.Configuration = new LoggingConfiguration();
                 LogManager.ThrowExceptions = true;
 
-                LogManager.Configuration.AddTarget("memory", mTarget);
-                LogManager.Configuration.LoggingRules.Add(new LoggingRule("*", LogLevel.Debug, mTarget));
+                LogManager.Configuration.AddTarget(mTarget.Name, mTarget);
+                LogManager.Configuration.AddRuleForAllLevels(mTarget.Name);
                 System.Threading.Thread.Sleep(1);
                 LogManager.ReconfigExistingLoggers();
                 System.Threading.Thread.Sleep(1);
@@ -538,8 +539,8 @@ namespace NLog.UnitTests
 
             var task2 = task1.ContinueWith((t) =>
             {
-                LogManager.Configuration.AddTarget("memory2", mTarget2);
-                LogManager.Configuration.LoggingRules.Add(new LoggingRule("*", LogLevel.Debug, mTarget2));
+                LogManager.Configuration.AddTarget(mTarget2.Name, mTarget2);
+                LogManager.Configuration.AddRuleForAllLevels(mTarget2.Name);
                 System.Threading.Thread.Sleep(1);
                 LogManager.ReconfigExistingLoggers();
                 System.Threading.Thread.Sleep(1);
@@ -579,6 +580,44 @@ namespace NLog.UnitTests
             Assert.NotEqual(0, mTarget.Logs.Count + mTarget2.Logs.Count);
         }
 
+        [Fact]
+        public void RemovedTargetShouldNotLog()
+        {
+            LogManager.ThrowExceptions = true;
+
+            var config = new LoggingConfiguration();
+            var targetA = new MemoryQueueTarget("TargetA") { Layout = "A | ${message}" };
+            var targetB = new MemoryQueueTarget("TargetB") { Layout = "B | ${message}" };
+            config.AddRule(LogLevel.Debug, LogLevel.Fatal, targetA);
+            config.AddRule(LogLevel.Debug, LogLevel.Fatal, targetB);
+
+            LogManager.Configuration = config;
+
+            Assert.Equal(new[] { "TargetA", "TargetB" }, LogManager.Configuration.ConfiguredNamedTargets.Select(target => target.Name));
+
+            Assert.NotNull(LogManager.Configuration.FindTargetByName("TargetA"));
+            Assert.NotNull(LogManager.Configuration.FindTargetByName("TargetB"));
+
+            var logger = LogManager.GetCurrentClassLogger();
+            logger.Info("Hello World");
+
+            Assert.Equal("A | Hello World", targetA.Logs.LastOrDefault());
+            Assert.Equal("B | Hello World", targetB.Logs.LastOrDefault());
+
+            // Remove the first target from the configuration
+            LogManager.Configuration.RemoveTarget("TargetA");
+
+            Assert.Equal(new[] { "TargetB" }, LogManager.Configuration.ConfiguredNamedTargets.Select(target => target.Name));
+
+            Assert.Null(LogManager.Configuration.FindTargetByName("TargetA"));
+            Assert.NotNull(LogManager.Configuration.FindTargetByName("TargetB"));
+
+            logger.Info("Goodbye World");
+
+            Assert.Null(targetA.Logs);  // Flushed and closed
+            Assert.Equal("B | Goodbye World", targetB.Logs.LastOrDefault());
+        }
+
         /// <summary>
         /// target for <see cref="ThreadSafe_getCurrentClassLogger_test"/>
         /// </summary>
@@ -591,7 +630,7 @@ namespace NLog.UnitTests
             {
             }
 
-            public MemoryQueueTarget(string name)
+            public MemoryQueueTarget(string name) : this(1)
             {
                 Name = name;
             }

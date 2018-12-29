@@ -1,5 +1,5 @@
 ﻿// 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -33,7 +33,9 @@
 
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Text;
+using NLog.Config;
 using NLog.Internal;
 
 namespace NLog.MessageTemplates
@@ -41,36 +43,66 @@ namespace NLog.MessageTemplates
     /// <summary>
     /// Convert Render or serialize a value, with optionnally backwardscompatible with <see cref="string.Format(System.IFormatProvider,string,object[])"/>
     /// </summary>
-    internal class ValueSerializer : IValueSerializer
+    internal class ValueFormatter : IValueFormatter
     {
-        public static IValueSerializer Instance
+        public static IValueFormatter Instance
         {
-            get => _instance ?? (_instance = new ValueSerializer());
-            set => _instance = value ?? new ValueSerializer();
+            get => _instance ?? (_instance = new ValueFormatter());
+            set => _instance = value ?? new ValueFormatter();
         }
-        private static IValueSerializer _instance = null;
+        private static IValueFormatter _instance;
+        private static readonly IEqualityComparer<object> _referenceEqualsComparer = SingleItemOptimizedHashSet<object>.ReferenceEqualityComparer.Default;
 
         /// <summary>Singleton</summary>
-        private ValueSerializer()
+        private ValueFormatter()
         {
         }
 
-        private const int MaxRecursionDepth = 10;
+        private const int MaxRecursionDepth = 2;
         private const int MaxValueLength = 512 * 1024;
         private const string LiteralFormatSymbol = "l";
 
         private readonly MruCache<Enum, string> _enumCache = new MruCache<Enum, string>(1500);
 
-        /// <inheritDoc/>
-        public bool StringifyObject(object value, string format, IFormatProvider formatProvider, StringBuilder builder)
+        /// <summary>
+        /// Serialization of an object, e.g. JSON and append to <paramref name="builder"/>
+        /// </summary>
+        /// <param name="value">The object to serialize to string.</param>
+        /// <param name="format">Parameter Format</param>
+        /// <param name="captureType">Parameter CaptureType</param>
+        /// <param name="formatProvider">An object that supplies culture-specific formatting information.</param>
+        /// <param name="builder">Output destination.</param>
+        /// <returns>Serialize succeeded (true/false)</returns>
+        public bool FormatValue(object value, string format, CaptureType captureType, IFormatProvider formatProvider, StringBuilder builder)
         {
-            builder.Append('"');
-            FormatToString(value, null, formatProvider, builder);
-            builder.Append('"');
-            return true;
+            switch (captureType)
+            {
+                case CaptureType.Serialize:
+                    {
+                        return ConfigurationItemFactory.Default.JsonConverter.SerializeObject(value, builder);
+                    }
+                case CaptureType.Stringify:
+                    {
+                        builder.Append('"');
+                        FormatToString(value, null, formatProvider, builder);
+                        builder.Append('"');
+                        return true;
+                    }
+                default:
+                    {
+                        return FormatObject(value, format, formatProvider, builder);
+                    }
+            }
         }
 
-        /// <inheritDoc/>
+        /// <summary>
+        /// Format an object to a readable string, or if it's an object, serialize
+        /// </summary>
+        /// <param name="value">The value to convert</param>
+        /// <param name="format"></param>
+        /// <param name="formatProvider"></param>
+        /// <param name="builder"></param>
+        /// <returns></returns>
         public bool FormatObject(object value, string format, IFormatProvider formatProvider, StringBuilder builder)
         {
             if (SerializeSimpleObject(value, format, formatProvider, builder))
@@ -88,22 +120,22 @@ namespace NLog.MessageTemplates
             return true;
         }
 
-        /// <inheritDoc/>
-        public bool SerializeObject(object value, string format, IFormatProvider formatProvider, StringBuilder builder)
-        {
-            return Config.ConfigurationItemFactory.Default.JsonConverter.SerializeObject(value, builder);
-        }
-
+        /// <summary>
+        /// Try serialising a scalar (string, int, NULL) or simple type (IFormattable)
+        /// </summary>
+        /// <param name="value"></param>
+        /// <param name="format"></param>
+        /// <param name="formatProvider"></param>
+        /// <param name="builder"></param>
+        /// <returns></returns>
         private bool SerializeSimpleObject(object value, string format, IFormatProvider formatProvider, StringBuilder builder)
         {
             // todo support all scalar types: 
 
             // todo byte[] - hex?
-            // todo datetime, timespan, datetimeoffset
             // todo nullables correct?
 
-            var stringValue = value as string;
-            if (stringValue != null)
+            if (value is string stringValue)
             {
                 bool includeQuotes = format != LiteralFormatSymbol;
                 if (includeQuotes) builder.Append('"');
@@ -118,7 +150,7 @@ namespace NLog.MessageTemplates
                 return true;
             }
 
-            IFormattable formattable = null;
+            IFormattable formattable;
             if (!string.IsNullOrEmpty(format) && (formattable = value as IFormattable) != null)
             {
                 builder.Append(formattable.ToString(format, formatProvider));
@@ -160,7 +192,7 @@ namespace NLog.MessageTemplates
                             }
                             else
                             {
-                                AppendIntegerAsString(builder, value, objTypeCode);
+                                builder.AppendIntegerAsString(value, objTypeCode);
                             }
                         }
                         return true;
@@ -172,40 +204,6 @@ namespace NLog.MessageTemplates
             }
 
             return false;
-        }
-
-        private static void AppendIntegerAsString(StringBuilder sb, object value, TypeCode objTypeCode)
-        {
-            switch (objTypeCode)
-            {
-                case TypeCode.Byte: sb.AppendInvariant((Byte)value); break;
-                case TypeCode.SByte: sb.AppendInvariant((SByte)value); break;
-                case TypeCode.Int16: sb.AppendInvariant((Int16)value); break;
-                case TypeCode.Int32: sb.AppendInvariant((Int32)value); break;
-                case TypeCode.Int64:
-                    {
-                        Int64 int64 = (Int64)value;
-                        if (int64 < Int32.MaxValue && int64 > Int32.MinValue)
-                            sb.AppendInvariant((Int32)int64);
-                        else
-                            sb.Append(int64);
-                    }
-                    break;
-                case TypeCode.UInt16: sb.AppendInvariant((UInt16)value); break;
-                case TypeCode.UInt32: sb.AppendInvariant((UInt32)value); break;
-                case TypeCode.UInt64:
-                    {
-                        UInt64 uint64 = (UInt64)value;
-                        if (uint64 < UInt32.MaxValue)
-                            sb.AppendInvariant((UInt32)uint64);
-                        else
-                            sb.Append(uint64);
-                    }
-                    break;
-                default:
-                    sb.Append(XmlHelper.XmlConvertToString(value, objTypeCode));
-                    break;
-            }
         }
 
         private void AppendEnumAsString(StringBuilder sb, Enum value)
@@ -234,18 +232,31 @@ namespace NLog.MessageTemplates
             IDictionary dictionary = collection as IDictionary;
             if (dictionary != null)
             {
-                using (new SingleItemOptimizedHashSet<object>.SingleItemScopedInsert(dictionary, ref objectsInPath, true))
+                using (new SingleItemOptimizedHashSet<object>.SingleItemScopedInsert(dictionary, ref objectsInPath, true, _referenceEqualsComparer))
                 {
                     return SerializeDictionaryObject(dictionary, format, formatProvider, builder, objectsInPath, depth);
                 }
             }
 
-            using (new SingleItemOptimizedHashSet<object>.SingleItemScopedInsert(collection, ref objectsInPath, true))
+            using (new SingleItemOptimizedHashSet<object>.SingleItemScopedInsert(collection, ref objectsInPath, true, _referenceEqualsComparer))
             {
                 return SerializeCollectionObject(collection, format, formatProvider, builder, objectsInPath, depth);
             }
         }
 
+        /// <summary>
+        /// Serialize Dictionary as JSON like structure, without { and }
+        /// </summary>
+        /// <example>
+        /// "FirstOrder"=true, "Previous login"=20-12-2017 14:55:32, "number of tries"=1
+        /// </example>
+        /// <param name="dictionary"></param>
+        /// <param name="format">formatstring of an item</param>
+        /// <param name="formatProvider"></param>
+        /// <param name="builder"></param>
+        /// <param name="objectsInPath"></param>
+        /// <param name="depth"></param>
+        /// <returns></returns>
         private bool SerializeDictionaryObject(IDictionary dictionary, string format, IFormatProvider formatProvider, StringBuilder builder, SingleItemOptimizedHashSet<object> objectsInPath, int depth)
         {
             bool separator = false;
@@ -290,6 +301,13 @@ namespace NLog.MessageTemplates
             return true;
         }
 
+        /// <summary>
+        /// Convert a value to a string with format and append to <paramref name="builder"/>.
+        /// </summary>
+        /// <param name="value">The value to convert.</param>
+        /// <param name="format">Format sting for the value.</param>
+        /// <param name="formatProvider">Format provider for the value.</param>
+        /// <param name="builder">Append to this</param>
         public static void FormatToString(object value, string format, IFormatProvider formatProvider, StringBuilder builder)
         {
             var stringValue = value as string;

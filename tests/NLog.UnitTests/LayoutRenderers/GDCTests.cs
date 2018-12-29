@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -59,6 +59,23 @@ namespace NLog.UnitTests.LayoutRenderers
             GlobalDiagnosticsContext.Remove("myitem");
             LogManager.GetLogger("A").Debug("c");
             AssertDebugLastMessage("debug", " c");
+        }
+
+        [Fact]
+        public void GDCFormatTest()
+        {
+            LogManager.Configuration = CreateConfigurationFromString(@"
+            <nlog>
+                <targets><target name='debug' type='Debug' layout='${gdc:item=appid:format=@} ${message}' /></targets>
+                <rules>
+                    <logger name='*' minlevel='Debug' writeTo='debug' />
+                </rules>
+            </nlog>");
+
+            GlobalDiagnosticsContext.Clear();
+            GlobalDiagnosticsContext.Set("appid", new { AppId = 123 });
+            LogManager.GetLogger("A").Debug("a");
+            AssertDebugLastMessage("debug", "{\"AppId\":123} a");
         }
     }
 }

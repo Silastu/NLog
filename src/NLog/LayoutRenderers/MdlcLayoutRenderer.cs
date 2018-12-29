@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -35,13 +35,14 @@ namespace NLog.LayoutRenderers
 {
 #if !SILVERLIGHT
     using System.Text;
-    using Config;
-    using Internal;
+    using NLog.Config;
+    using NLog.Internal;
 
     /// <summary>
     /// Mapped Diagnostic Logical Context item (based on CallContext).
     /// </summary>
     [LayoutRenderer("mdlc")]
+    [ThreadSafe]
     public class MdlcLayoutRenderer : LayoutRenderer
     {
         /// <summary>
@@ -53,6 +54,12 @@ namespace NLog.LayoutRenderers
         public string Item { get; set; }
 
         /// <summary>
+        /// Format string for conversion from object to string.
+        /// </summary>
+        /// <docgen category='Rendering Options' order='50' />
+        public string Format { get; set; }
+
+        /// <summary>
         /// Renders the specified MDLC item and appends it to the specified <see cref="StringBuilder" />.
         /// </summary>
         /// <param name="builder">The <see cref="StringBuilder"/> to append the rendered data to.</param>
@@ -62,7 +69,7 @@ namespace NLog.LayoutRenderers
             //don't use MappedDiagnosticsLogicalContext.Get to ensure we are not locking the Factory (indirect by LogManager.Configuration).
             var value = MappedDiagnosticsLogicalContext.GetObject(Item);
             var formatProvider = GetFormatProvider(logEvent, null);
-            builder.AppendFormattedValue(value, null, formatProvider);
+            builder.AppendFormattedValue(value, Format, formatProvider);
         }
     }
 #endif

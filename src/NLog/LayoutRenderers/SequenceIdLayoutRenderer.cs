@@ -1,5 +1,5 @@
 ﻿// 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -33,15 +33,16 @@
 
 namespace NLog.LayoutRenderers
 {
-    using Config;
-    using System.Globalization;
     using System.Text;
+    using NLog.Config;
+    using NLog.Internal;
 
     /// <summary>
     /// The sequence ID
     /// </summary>
     [LayoutRenderer("sequenceid")]
     [ThreadAgnostic]
+    [ThreadSafe]
     public class SequenceIdLayoutRenderer : LayoutRenderer
     {
         /// <summary>
@@ -51,7 +52,7 @@ namespace NLog.LayoutRenderers
         /// <param name="logEvent">Logging event.</param>
         protected override void Append(StringBuilder builder, LogEventInfo logEvent)
         {
-            builder.Append(logEvent.SequenceID.ToString(CultureInfo.InvariantCulture));
+            builder.AppendInvariant(logEvent.SequenceID);
         }
     }
 }

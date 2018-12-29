@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -564,6 +564,39 @@ namespace NLog.UnitTests.Config
 
         }
 
+        [Fact]
+        public void TestReloadingInvalidConfiguration()
+        {
+            var validXmlConfig = @"<nlog>
+                    <targets><target name='debug' type='Debug' layout='${message}' /></targets>
+                    <rules>
+                        <logger name='*' minlevel='Debug' writeTo='debug' />
+                    </rules>
+                </nlog>";
+            var invalidXmlConfig = "";
+
+            string tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tempPath);
+
+            try {
+                var nlogConfigFile = Path.Combine(tempPath, "NLog.config");
+                WriteConfigFile(nlogConfigFile, invalidXmlConfig);
+
+                var invalidConfiguration = new XmlLoggingConfiguration(nlogConfigFile);
+                Assert.False(invalidConfiguration.InitializeSucceeded);
+
+                WriteConfigFile(nlogConfigFile, validXmlConfig);
+                var validReloadedConfiguration = (XmlLoggingConfiguration)invalidConfiguration.Reload();
+                Assert.True(validReloadedConfiguration.InitializeSucceeded);                
+            }
+            finally
+            {
+                if (Directory.Exists(tempPath))
+                {
+                    Directory.Delete(tempPath, true);
+                }
+            }
+        }
 
         private static void WriteConfigFile(string configFilePath, string config)
         {
@@ -652,7 +685,7 @@ namespace NLog.UnitTests.Config
             var factory = LogManager.LogFactory;
 
             //reloadTimer should be set for ReloadConfigOnTimer
-            factory.reloadTimer = new Timer((a) => { });
+            factory._reloadTimer = new Timer((a) => { });
             factory.ReloadConfigOnTimer(this);
             _reloading = false;
             return factory.Configuration;

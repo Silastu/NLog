@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -36,14 +36,16 @@ namespace NLog.LayoutRenderers
     using System;
     using System.Globalization;
     using System.Text;
-    using Config;
-    using Internal;
+    using NLog.Config;
+    using NLog.Internal;
 
     /// <summary>
     /// Log event context data. See <see cref="LogEventInfo.Properties"/>.
     /// </summary>
     [LayoutRenderer("event-properties")]
     [ThreadAgnostic]
+    [ThreadSafe]
+    [MutableUnsafe]
     public class EventPropertiesLayoutRenderer : LayoutRenderer
     {
         /// <summary>
@@ -65,12 +67,13 @@ namespace NLog.LayoutRenderers
         /// <summary>
         /// Format string for conversion from object to string.
         /// </summary>
+        /// <docgen category='Rendering Options' order='50' />
         public string Format { get; set; }
 
         /// <summary>
         /// Gets or sets the culture used for rendering. 
         /// </summary>
-        /// <docgen category='Rendering Options' order='10' />
+        /// <docgen category='Rendering Options' order='100' />
         public CultureInfo Culture { get; set; }
 
         /// <summary>

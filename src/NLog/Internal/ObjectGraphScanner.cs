@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -58,7 +58,10 @@ namespace NLog.Internal
         public static List<T> FindReachableObjects<T>(bool aggressiveSearch, params object[] rootObjects)
             where T : class
         {
-            InternalLogger.Trace("FindReachableObject<{0}>:", typeof(T));
+            if (InternalLogger.IsTraceEnabled)
+            {
+                InternalLogger.Trace("FindReachableObject<{0}>:", typeof(T));
+            }
             var result = new List<T>();
             var visitedObjects = new HashSet<object>();
 
@@ -103,8 +106,7 @@ namespace NLog.Internal
                 InternalLogger.Trace("{0}Scanning {1} '{2}'", new string(' ', level), type.Name, o);
             }
 
-            var t = o as T;
-            if (t != null)
+            if (o is T t)
             {
                 result.Add(t);
                 if (!aggressiveSearch)
@@ -144,8 +146,7 @@ namespace NLog.Internal
                     InternalLogger.Trace("{0}Scanning Property {1} '{2}' {3}", new string(' ', level + 1), prop.Name, value.ToString(), prop.PropertyType.Namespace);
                 }
 
-                var list = value as IList;
-                if (list != null)
+                if (value is IList list)
                 {
                     //try first icollection for syncroot
                     List<object> elements;
@@ -163,8 +164,7 @@ namespace NLog.Internal
                 }
                 else
                 {
-                    var enumerable = value as IEnumerable;
-                    if (enumerable != null)
+                    if (value is IEnumerable enumerable)
                     {
                         //new list to prevent: Collection was modified after the enumerator was instantiated.
                         var elements = enumerable as IList<object> ?? enumerable.Cast<object>().ToList();

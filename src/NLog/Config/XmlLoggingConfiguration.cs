@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -31,28 +31,25 @@
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-using JetBrains.Annotations;
-
 namespace NLog.Config
 {
     using System;
     using System.Collections;
     using System.Collections.Generic;
-    using System.Diagnostics;
+    using System.Collections.ObjectModel;
     using System.Globalization;
-    using System.Linq;
     using System.IO;
+    using System.Linq;
     using System.Reflection;
     using System.Xml;
-    using Common;
-    using Filters;
-    using Internal;
-    using Layouts;
-    using Targets;
-    using Targets.Wrappers;
-    using LayoutRenderers;
-    using Time;
-    using System.Collections.ObjectModel;
+    using NLog.Common;
+    using NLog.Filters;
+    using NLog.Internal;
+    using NLog.LayoutRenderers;
+    using NLog.Layouts;
+    using NLog.Targets;
+    using NLog.Targets.Wrappers;
+    using NLog.Time;
 #if SILVERLIGHT
 // ReSharper disable once RedundantUsingDirective
     using System.Windows;
@@ -84,7 +81,6 @@ namespace NLog.Config
 
         private string _originalFileName;
 
-        private LogFactory _logFactory = null;
 
         private ConfigurationItemFactory ConfigurationItemFactory => ConfigurationItemFactory.Default;
 
@@ -125,9 +121,8 @@ namespace NLog.Config
         /// <param name="ignoreErrors">Ignore any errors during configuration.</param>
         /// <param name="logFactory">The <see cref="LogFactory" /> to which to apply any applicable configuration values.</param>
         public XmlLoggingConfiguration(string fileName, bool ignoreErrors, LogFactory logFactory)
+            : base(logFactory)
         {
-            _logFactory = logFactory;
-
             using (XmlReader reader = CreateFileReader(fileName))
             {
                 Initialize(reader, fileName, ignoreErrors);
@@ -196,8 +191,8 @@ namespace NLog.Config
         /// <param name="ignoreErrors">Ignore any errors during configuration.</param>
         /// <param name="logFactory">The <see cref="LogFactory" /> to which to apply any applicable configuration values.</param>
         public XmlLoggingConfiguration(XmlReader reader, string fileName, bool ignoreErrors, LogFactory logFactory)
+            : base(logFactory)
         {
-            _logFactory = logFactory;
             Initialize(reader, fileName, ignoreErrors);
         }
 
@@ -209,8 +204,6 @@ namespace NLog.Config
         /// <param name="fileName">Name of the XML file.</param>
         internal XmlLoggingConfiguration(XmlElement element, string fileName)
         {
-            _logFactory = LogManager.LogFactory;
-
             using (var stringReader = new StringReader(element.OuterXml))
             {
                 XmlReader reader = XmlReader.Create(stringReader);
@@ -227,8 +220,6 @@ namespace NLog.Config
         /// <param name="ignoreErrors">If set to <c>true</c> errors will be ignored during file processing.</param>
         internal XmlLoggingConfiguration(XmlElement element, string fileName, bool ignoreErrors)
         {
-            _logFactory = LogManager.LogFactory;
-
             using (var stringReader = new StringReader(element.OuterXml))
             {
                 XmlReader reader = XmlReader.Create(stringReader);
@@ -387,9 +378,11 @@ namespace NLog.Config
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope", Justification = "Target is disposed elsewhere.")]
         private static Target WrapWithAsyncTargetWrapper(Target target)
         {
-            var asyncTargetWrapper = new AsyncTargetWrapper();
-            asyncTargetWrapper.WrappedTarget = target;
-            asyncTargetWrapper.Name = target.Name;
+            var asyncTargetWrapper = new AsyncTargetWrapper
+            {
+                WrappedTarget = target,
+                Name = target.Name
+            };
             target.Name = target.Name + "_wrapped";
             InternalLogger.Debug("Wrapping target '{0}' with AsyncTargetWrapper and renaming to '{1}", asyncTargetWrapper.Name, target.Name);
             target = asyncTargetWrapper;
@@ -407,11 +400,11 @@ namespace NLog.Config
             try
             {
                 InitializeSucceeded = null;
+                _originalFileName = fileName;
                 reader.MoveToContent();
                 var content = new NLogXmlElement(reader);
                 if (fileName != null)
                 {
-                    _originalFileName = fileName;
                     ParseTopLevel(content, fileName, autoReloadDefault: false);
 
                     InternalLogger.Info("Configured from an XML element in {0}...", fileName);
@@ -468,43 +461,6 @@ namespace NLog.Config
                     }
                 }
             }
-        }
-
-        /// <summary>
-        /// Checks whether unused targets exist. If found any, just write an internal log at Warn level.
-        /// <remarks>If initializing not started or failed, then checking process will be canceled</remarks>
-        /// </summary>
-        private void CheckUnusedTargets()
-        {
-            if (InitializeSucceeded == null)
-            {
-                InternalLogger.Warn("Unused target checking is canceled -> initialize not started yet.");
-                return;
-            }
-            if (!InitializeSucceeded.Value)
-            {
-                InternalLogger.Warn("Unused target checking is canceled -> initialize not succeeded.");
-                return;
-            }
-
-            ReadOnlyCollection<Target> configuredNamedTargets = ConfiguredNamedTargets; //assign to variable because `ConfiguredNamedTargets` computes a new list every time.
-            InternalLogger.Debug("Unused target checking is started... Rule Count: {0}, Target Count: {1}", LoggingRules.Count, configuredNamedTargets.Count);
-
-            HashSet<string> targetNamesAtRules = new HashSet<string>(LoggingRules.SelectMany(r => r.Targets).Select(t => t.Name));
-            HashSet<string> wrappedTargetNames = new HashSet<string>(configuredNamedTargets.OfType<WrapperTargetBase>().Select(wt => wt.WrappedTarget.Name));
-
-
-            int unusedCount = 0;
-            configuredNamedTargets.ToList().ForEach((target) =>
-            {
-                if (!targetNamesAtRules.Contains(target.Name) && !wrappedTargetNames.Contains(target.Name))
-                {
-                    InternalLogger.Warn("Unused target detected. Add a rule for this target to the configuration. TargetName: {0}", target.Name);
-                    unusedCount++;
-                }
-            });
-
-            InternalLogger.Debug("Unused target checking is completed. Total Rule Count: {0}, Total Target Count: {1}, Unused Target Count: {2}", LoggingRules.Count, configuredNamedTargets.Count, unusedCount);
         }
 
         /// <summary>
@@ -587,9 +543,9 @@ namespace NLog.Config
             if (filePath != null)
                 _fileMustAutoReloadLookup[GetFileLookupKey(filePath)] = autoReload;
 
-            _logFactory.ThrowExceptions = nlogElement.GetOptionalBooleanAttribute("throwExceptions", _logFactory.ThrowExceptions);
-            _logFactory.ThrowConfigExceptions = nlogElement.GetOptionalBooleanAttribute("throwConfigExceptions", _logFactory.ThrowConfigExceptions);
-            _logFactory.KeepVariablesOnReload = nlogElement.GetOptionalBooleanAttribute("keepVariablesOnReload", _logFactory.KeepVariablesOnReload);
+            LogFactory.ThrowExceptions = nlogElement.GetOptionalBooleanAttribute("throwExceptions", LogFactory.ThrowExceptions);
+            LogFactory.ThrowConfigExceptions = nlogElement.GetOptionalBooleanAttribute("throwConfigExceptions", LogFactory.ThrowConfigExceptions);
+            LogFactory.KeepVariablesOnReload = nlogElement.GetOptionalBooleanAttribute("keepVariablesOnReload", LogFactory.KeepVariablesOnReload);
             InternalLogger.LogToConsole = nlogElement.GetOptionalBooleanAttribute("internalLogToConsole", InternalLogger.LogToConsole);
             InternalLogger.LogToConsoleError = nlogElement.GetOptionalBooleanAttribute("internalLogToConsoleError", InternalLogger.LogToConsoleError);
             InternalLogger.LogFile = nlogElement.GetOptionalAttribute("internalLogFile", InternalLogger.LogFile);
@@ -601,7 +557,7 @@ namespace NLog.Config
             InternalLogger.LogToTrace = nlogElement.GetOptionalBooleanAttribute("internalLogToTrace", InternalLogger.LogToTrace);
 #endif
             InternalLogger.IncludeTimestamp = nlogElement.GetOptionalBooleanAttribute("internalLogIncludeTimestamp", InternalLogger.IncludeTimestamp);
-            _logFactory.GlobalThreshold = LogLevel.FromString(nlogElement.GetOptionalAttribute("globalThreshold", _logFactory.GlobalThreshold.Name));
+            LogFactory.GlobalThreshold = LogLevel.FromString(nlogElement.GetOptionalAttribute("globalThreshold", LogFactory.GlobalThreshold.Name));
 
             var children = nlogElement.Children.ToList();
 
@@ -651,7 +607,6 @@ namespace NLog.Config
                 }
             }
 
-
             foreach (var ruleChild in rulesList)
             {
                 ParseRulesElement(ruleChild, LoggingRules);
@@ -691,20 +646,17 @@ namespace NLog.Config
                 InternalLogger.Debug("The logger named '{0}' are disabled");
                 return;
             }
+            
+            string appendTo = loggerElement.GetOptionalAttribute("appendTo", null) ?? loggerElement.GetOptionalAttribute("writeTo", null);
 
-            var rule = new LoggingRule();
-            string appendTo = loggerElement.GetOptionalAttribute("appendTo", null);
-            if (appendTo == null)
+            var rule = new LoggingRule
             {
-                appendTo = loggerElement.GetOptionalAttribute("writeTo", null);
-            }
-
-            rule.LoggerNamePattern = namePattern;
+                LoggerNamePattern = namePattern
+            };
             if (appendTo != null)
             {
-                foreach (string t in appendTo.Split(','))
+                foreach (string targetName in StringToList(appendTo))
                 {
-                    string targetName = t.Trim();
                     Target target = FindTargetByName(targetName);
 
                     if (target != null)
@@ -720,9 +672,48 @@ namespace NLog.Config
 
             rule.Final = loggerElement.GetOptionalBooleanAttribute("final", false);
 
-            string levelString;
+            ParseLevels(loggerElement, rule);
 
-            if (loggerElement.AttributeValues.TryGetValue("level", out levelString))
+            var children = loggerElement.Children.ToList();
+            foreach (var child in children)
+            {
+                switch (child.LocalName.ToUpperInvariant())
+                {
+                    case "FILTERS":
+                        ParseFilters(rule, child);
+                        break;
+
+                    case "LOGGER":
+                        ParseLoggerElement(child, rule.ChildRules);
+                        break;
+                }
+            }
+
+            lock (rulesCollection)
+            {
+                rulesCollection.Add(rule);
+            }
+        }
+
+        /// <summary>
+        /// Split list on comma, trim items
+        /// </summary>
+        /// <param name="text"></param>
+        /// <returns>no empty items</returns>
+        private static IEnumerable<string> StringToList(string text)
+        {
+            foreach (var it in text.Split(','))
+            {
+                if (!StringHelpers.IsNullOrWhiteSpace(it))
+                {
+                    yield return it.Trim();
+                }
+            }
+        }
+
+        private static void ParseLevels(NLogXmlElement loggerElement, LoggingRule rule)
+        {
+            if (loggerElement.AttributeValues.TryGetValue("level", out var levelString))
             {
                 LogLevel level = LogLevel.FromString(levelString);
                 rule.EnableLoggingForLevel(level);
@@ -745,15 +736,13 @@ namespace NLog.Config
             {
                 int minLevel = 0;
                 int maxLevel = LogLevel.MaxLevel.Ordinal;
-                string minLevelString;
-                string maxLevelString;
 
-                if (loggerElement.AttributeValues.TryGetValue("minLevel", out minLevelString))
+                if (loggerElement.AttributeValues.TryGetValue("minLevel", out var minLevelString))
                 {
                     minLevel = LogLevel.FromString(minLevelString).Ordinal;
                 }
 
-                if (loggerElement.AttributeValues.TryGetValue("maxLevel", out maxLevelString))
+                if (loggerElement.AttributeValues.TryGetValue("maxLevel", out var maxLevelString))
                 {
                     maxLevel = LogLevel.FromString(maxLevelString).Ordinal;
                 }
@@ -763,23 +752,6 @@ namespace NLog.Config
                     rule.EnableLoggingForLevel(LogLevel.FromOrdinal(i));
                 }
             }
-
-            var children = loggerElement.Children.ToList();
-            foreach (var child in children)
-            {
-                switch (child.LocalName.ToUpperInvariant())
-                {
-                    case "FILTERS":
-                        ParseFilters(rule, child);
-                        break;
-
-                    case "LOGGER":
-                        ParseLoggerElement(child, rule.ChildRules);
-                        break;
-                }
-            }
-
-            rulesCollection.Add(rule);
         }
 
         private void ParseFilters(LoggingRule rule, NLogXmlElement filtersElement)
@@ -869,8 +841,7 @@ namespace NLog.Config
         private void ParseTargetElement(Target target, NLogXmlElement targetElement, Dictionary<string, NLogXmlElement> typeNameToDefaultTargetParameters = null)
         {
             string targetType = StripOptionalNamespacePrefix(targetElement.GetRequiredAttribute("type"));
-            NLogXmlElement defaults;
-            if (typeNameToDefaultTargetParameters != null && typeNameToDefaultTargetParameters.TryGetValue(targetType, out defaults))
+            if (typeNameToDefaultTargetParameters != null && typeNameToDefaultTargetParameters.TryGetValue(targetType, out var defaults))
             {
                 ParseTargetElement(target, defaults, null);
             }
@@ -899,7 +870,7 @@ namespace NLog.Config
             }
         }
 
-        private bool ParseTargetWrapper(Dictionary<string, NLogXmlElement> typeNameToDefaultTargetParameters, string name, NLogXmlElement childElement, 
+        private bool ParseTargetWrapper(Dictionary<string, NLogXmlElement> typeNameToDefaultTargetParameters, string name, NLogXmlElement childElement,
             WrapperTargetBase wrapper)
         {
             if (IsTargetRefElement(name))
@@ -942,7 +913,7 @@ namespace NLog.Config
             return false;
         }
 
-        private bool ParseCompoundTarget(Dictionary<string, NLogXmlElement> typeNameToDefaultTargetParameters, string name, NLogXmlElement childElement, 
+        private bool ParseCompoundTarget(Dictionary<string, NLogXmlElement> typeNameToDefaultTargetParameters, string name, NLogXmlElement childElement,
             CompoundTargetBase compound)
         {
             if (IsTargetRefElement(name))
@@ -998,39 +969,46 @@ namespace NLog.Config
                 string type = StripOptionalNamespacePrefix(addElement.GetOptionalAttribute("type", null));
                 if (type != null)
                 {
-                    try
-                    {
-                        ConfigurationItemFactory.RegisterType(Type.GetType(type, true), prefix);
-                    }
-                    catch (Exception exception)
-                    {
-                        if (exception.MustBeRethrownImmediately())
-                        {
-                            throw;
-                        }
-
-                        InternalLogger.Error(exception, "Error loading extensions.");
-                        NLogConfigurationException configException =
-                            new NLogConfigurationException("Error loading extensions: " + type, exception);
-
-                        if (configException.MustBeRethrown())
-                        {
-                            throw configException;
-                        }
-                    }
+                    RegistType(type, prefix);
                 }
 
+#if !NETSTANDARD1_3
                 string assemblyFile = addElement.GetOptionalAttribute("assemblyFile", null);
                 if (assemblyFile != null)
                 {
                     ParseExtensionWithAssemblyFle(baseDirectory, assemblyFile, prefix);
                     continue;
                 }
+#endif
 
                 string assemblyName = addElement.GetOptionalAttribute("assembly", null);
                 if (assemblyName != null)
                 {
                     ParseExtensionWithAssembly(assemblyName, prefix);
+                }
+            }
+        }
+
+        private void RegistType(string type, string prefix)
+        {
+            try
+            {
+                ConfigurationItemFactory.RegisterType(Type.GetType(type, true), prefix);
+            }
+            catch (Exception exception)
+            {
+                if (exception.MustBeRethrownImmediately())
+                {
+                    throw;
+                }
+
+                InternalLogger.Error(exception, "Error loading extensions.");
+                NLogConfigurationException configException =
+                    new NLogConfigurationException("Error loading extensions: " + type, exception);
+
+                if (configException.MustBeRethrown())
+                {
+                    throw configException;
                 }
             }
         }
@@ -1060,6 +1038,7 @@ namespace NLog.Config
             }
         }
 
+#if !NETSTANDARD1_3
         private void ParseExtensionWithAssemblyFle(string baseDirectory, string assemblyFile, string prefix)
         {
             try
@@ -1083,9 +1062,8 @@ namespace NLog.Config
                     throw configException;
                 }
             }
-
-            return;
         }
+#endif
 
         private void ParseIncludeElement(NLogXmlElement includeElement, string baseDirectory, bool autoReloadDefault)
         {
@@ -1215,7 +1193,7 @@ namespace NLog.Config
             TimeSource.Current = newTimeSource;
         }
 
-#endregion
+        #endregion
 
         private static string GetFileLookupKey(string fileName)
         {
@@ -1261,8 +1239,7 @@ namespace NLog.Config
         {
             string name = element.LocalName;
 
-            PropertyInfo propInfo;
-            if (!PropertyHelper.TryGetPropertyInfo(o, name, out propInfo))
+            if (!PropertyHelper.TryGetPropertyInfo(o, name, out var propInfo))
             {
                 return false;
             }
@@ -1313,11 +1290,10 @@ namespace NLog.Config
 
         private bool SetLayoutFromElement(object o, NLogXmlElement layoutElement)
         {
-            PropertyInfo targetPropertyInfo;
             string name = layoutElement.LocalName;
 
             // if property exists
-            if (PropertyHelper.TryGetPropertyInfo(o, name, out targetPropertyInfo))
+            if (PropertyHelper.TryGetPropertyInfo(o, name, out var targetPropertyInfo))
             {
                 Layout layout = TryCreateLayoutInstance(layoutElement, targetPropertyInfo.PropertyType);
 
@@ -1341,8 +1317,7 @@ namespace NLog.Config
 
             string name = element.LocalName;
 
-            PropertyInfo propInfo;
-            if (!PropertyHelper.TryGetPropertyInfo(o, name, out propInfo))
+            if (!PropertyHelper.TryGetPropertyInfo(o, name, out var propInfo))
             {
                 return false;
             }
@@ -1404,30 +1379,6 @@ namespace NLog.Config
                 return null;
 
             return ConfigurationItemFactory.Layouts.CreateInstance(ExpandSimpleVariables(layoutTypeName));
-        }
-
-        /// <summary>
-        /// Replace a simple variable with a value. The orginal value is removed and thus we cannot redo this in a later stage.
-        /// 
-        /// Use for that: <see cref="VariableLayoutRenderer"/>
-        /// </summary>
-        /// <param name="input"></param>
-        /// <returns></returns>
-        private string ExpandSimpleVariables(string input)
-        {
-            string output = input;
-
-            // TODO - make this case-insensitive, will probably require a different approach
-            var variables = Variables.ToList();
-            foreach (var kvp in variables)
-            {
-                var layout = kvp.Value;
-                //this value is set from xml and that's a string. Because of that, we can use SimpleLayout here.
-
-                if (layout != null) output = output.Replace("${" + kvp.Key + "}", layout.OriginalText);
-            }
-
-            return output;
         }
     }
 }

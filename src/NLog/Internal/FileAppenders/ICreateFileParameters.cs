@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -90,11 +90,6 @@ namespace NLog.Internal.FileAppenders
         /// </summary>
         Win32FileAttributes FileAttributes { get; }
 #endif
-
-        /// <summary>
-        /// Should we capture the last write time of a file?
-        /// </summary>
-        bool CaptureLastWriteTime { get; }
 
         /// <summary>
         /// Should archive mutex be created?

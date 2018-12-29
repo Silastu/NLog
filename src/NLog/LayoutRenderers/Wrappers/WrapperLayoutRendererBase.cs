@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -34,8 +34,8 @@
 namespace NLog.LayoutRenderers.Wrappers
 {
     using System.Text;
-    using Config;
-    using Layouts;
+    using NLog.Config;
+    using NLog.Layouts;
 
     /// <summary>
     /// Base class for <see cref="LayoutRenderer"/>s which wrapping other <see cref="LayoutRenderer"/>s. 
@@ -63,6 +63,26 @@ namespace NLog.LayoutRenderers.Wrappers
         /// <param name="builder">The <see cref="StringBuilder"/> to append the rendered data to.</param>
         /// <param name="logEvent">Logging event.</param>
         protected override void Append(StringBuilder builder, LogEventInfo logEvent)
+        {
+            int orgLength = builder.Length;
+            try
+            {
+                RenderInnerAndTransform(logEvent, builder, orgLength);
+            }
+            catch
+            {
+                builder.Length = orgLength; // Rewind/Truncate on exception
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Appends the rendered output from <see cref="Inner"/>-layout and transforms the added output (when necessary)
+        /// </summary>
+        /// <param name="logEvent">Logging event.</param>
+        /// <param name="builder">The <see cref="StringBuilder"/> to append the rendered data to.</param>
+        /// <param name="orgLength">Start position for any necessary transformation of <see cref="StringBuilder"/>.</param>
+        protected virtual void RenderInnerAndTransform(LogEventInfo logEvent, StringBuilder builder, int orgLength)
         {
             string msg = RenderInner(logEvent);
             builder.Append(Transform(logEvent, msg));

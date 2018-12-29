@@ -1,5 +1,5 @@
 ﻿// 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -176,7 +176,7 @@ namespace NLog.UnitTests.Targets.Wrappers
 
             //We should have written 6 messages (1 in first interval and 5 in second interval).
             Assert.Equal(6, wrappedTarget.WriteCount);
-            Assert.Contains("new interval", internalLog);
+            Assert.Contains("New interval", internalLog);
             Assert.Null(lastException);
         }
 

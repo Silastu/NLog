@@ -1,5 +1,5 @@
 ﻿// 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -45,7 +45,7 @@ namespace NLog.Internal
     /// The <see cref="MessageProperties" /> are returned as the first items
     /// in the collection, and in positional order.
     /// </summary>
-    internal sealed class PropertiesDictionary : IDictionary<object, object>
+    internal sealed class PropertiesDictionary : IDictionary<object, object>, IEnumerable<MessageTemplateParameter>
     {
         private struct PropertyValue
         {
@@ -169,12 +169,9 @@ namespace NLog.Internal
         {
             get
             {
-                if (!IsEmpty)
+                if (!IsEmpty && EventProperties.TryGetValue(key, out var valueItem))
                 {
-                    if (EventProperties.TryGetValue(key, out var valueItem))
-                    {
-                        return valueItem.Value;
-                    }
+                    return valueItem.Value;
                 }
 
                 throw new KeyNotFoundException();
@@ -327,13 +324,10 @@ namespace NLog.Internal
         /// <inheritDoc/>
         public bool TryGetValue(object key, out object value)
         {
-            if (!IsEmpty)
+            if (!IsEmpty && EventProperties.TryGetValue(key, out var valueItem))
             {
-                if (EventProperties.TryGetValue(key, out var valueItem))
-                {
-                    value = valueItem.Value;
-                    return true;
-                }
+                value = valueItem.Value;
+                return true;
             }
 
             value = null;
@@ -353,20 +347,16 @@ namespace NLog.Internal
             if (parameterList.Count > 10)
                 return false;
 
-            bool uniqueMessageProperties = true;
             for (int i = 0; i < parameterList.Count - 1; ++i)
             {
                 for (int j = i + 1; j < parameterList.Count; ++j)
                 {
                     if (parameterList[i].Name == parameterList[j].Name)
-                    {
-                        uniqueMessageProperties = false;
-                        break;
-                    }
+                        return false;
                 }
             }
 
-            return uniqueMessageProperties;
+            return true;
         }
 
         /// <summary>
@@ -408,20 +398,17 @@ namespace NLog.Internal
             List<MessageTemplateParameter> messagePropertiesUnique = null;
             for (int i = 0; i < messageProperties.Count; ++i)
             {
-                if (eventProperties.TryGetValue(messageProperties[i].Name, out var valueItem))
+                if (eventProperties.TryGetValue(messageProperties[i].Name, out var valueItem) && valueItem.IsMessageProperty)
                 {
-                    if (valueItem.IsMessageProperty)
+                    if (messagePropertiesUnique == null)
                     {
-                        if (messagePropertiesUnique == null)
+                        messagePropertiesUnique = new List<MessageTemplateParameter>(messageProperties.Count);
+                        for (int j = 0; j < i; ++j)
                         {
-                            messagePropertiesUnique = new List<MessageTemplateParameter>(messageProperties.Count);
-                            for (int j = 0; j < i; ++j)
-                            {
-                                messagePropertiesUnique.Add(messageProperties[j]);
-                            }
+                            messagePropertiesUnique.Add(messageProperties[j]);
                         }
-                        continue;   // Skip already exists
                     }
+                    continue;   // Skip already exists
                 }
 
                 eventProperties[messageProperties[i].Name] = new PropertyValue(messageProperties[i].Value, true);
@@ -431,7 +418,12 @@ namespace NLog.Internal
             return messagePropertiesUnique ?? messageProperties;
         }
 
-        private class DictionaryEnumeratorBase
+        IEnumerator<MessageTemplateParameter> IEnumerable<MessageTemplateParameter>.GetEnumerator()
+        {
+            return new ParameterEnumerator(this);
+        }
+
+        private abstract class DictionaryEnumeratorBase : IDisposable
         {
             private readonly PropertiesDictionary _dictionary;
             private int? _messagePropertiesEnumerator;
@@ -443,7 +435,7 @@ namespace NLog.Internal
                 _dictionary = dictionary;
             }
 
-            protected KeyValuePair<object, object> CurrentPair
+            protected KeyValuePair<object, object> CurrentProperty
             {
                 get
                 {
@@ -454,6 +446,31 @@ namespace NLog.Internal
                     }
                     if (_eventEnumeratorCreated)
                         return new KeyValuePair<object, object>(_eventEnumerator.Current.Key, _eventEnumerator.Current.Value.Value);
+                    throw new InvalidOperationException();
+                }
+            }
+
+            protected MessageTemplateParameter CurrentParameter
+            {
+                get
+                {
+                    if (_messagePropertiesEnumerator.HasValue)
+                    {
+                        return _dictionary._messageProperties[_messagePropertiesEnumerator.Value];
+                    }
+                    if (_eventEnumeratorCreated)
+                    {
+                        string parameterName;
+                        try
+                        {
+                            parameterName = XmlHelper.XmlConvertToString(_eventEnumerator.Current.Key ?? string.Empty);
+                        }
+                        catch
+                        {
+                            parameterName = "";
+                        }
+                        return new MessageTemplateParameter(parameterName, _eventEnumerator.Current.Value.Value, null, CaptureType.Unknown);
+                    }
                     throw new InvalidOperationException();
                 }
             }
@@ -545,13 +562,27 @@ namespace NLog.Internal
             }
         }
 
+        private class ParameterEnumerator : DictionaryEnumeratorBase, IEnumerator<MessageTemplateParameter>
+        {
+            /// <inheritDoc/>
+            public MessageTemplateParameter Current => CurrentParameter;
+
+            /// <inheritDoc/>
+            object IEnumerator.Current => CurrentParameter;
+
+            public ParameterEnumerator(PropertiesDictionary dictionary)
+                : base(dictionary)
+            {
+            }
+        }
+
         private class DictionaryEnumerator : DictionaryEnumeratorBase, IEnumerator<KeyValuePair<object, object>>
         {
             /// <inheritDoc/>
-            public KeyValuePair<object, object> Current => CurrentPair;
+            public KeyValuePair<object, object> Current => CurrentProperty;
 
             /// <inheritDoc/>
-            object IEnumerator.Current => CurrentPair;
+            object IEnumerator.Current => CurrentProperty;
 
             public DictionaryEnumerator(PropertiesDictionary dictionary)
                 : base(dictionary)
@@ -644,7 +675,7 @@ namespace NLog.Internal
                 }
 
                 /// <inheritDoc/>
-                public object Current => _keyCollection ? CurrentPair.Key : CurrentPair.Value;
+                public object Current => _keyCollection ? CurrentProperty.Key : CurrentProperty.Value;
             }
         }
     }

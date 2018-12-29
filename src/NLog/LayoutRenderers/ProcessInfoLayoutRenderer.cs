@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -31,7 +31,7 @@
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-#if !SILVERLIGHT
+#if !SILVERLIGHT && !NETSTANDARD1_3
 
 namespace NLog.LayoutRenderers
 {
@@ -47,11 +47,11 @@ namespace NLog.LayoutRenderers
     /// The information about the running process.
     /// </summary>
     [LayoutRenderer("processinfo")]
+    [ThreadSafe]
     public class ProcessInfoLayoutRenderer : LayoutRenderer
     {
         private Process _process;
 
-        private PropertyInfo _propertyInfo;
         private ReflectionHelpers.LateBoundMethod _lateBoundPropertyGet;
 
         /// <summary>
@@ -82,13 +82,13 @@ namespace NLog.LayoutRenderers
         protected override void InitializeLayoutRenderer()
         {
             base.InitializeLayoutRenderer();
-            _propertyInfo = typeof(Process).GetProperty(Property.ToString());
-            if (_propertyInfo == null)
+            var propertyInfo = typeof(Process).GetProperty(Property.ToString());
+            if (propertyInfo == null)
             {
-                throw new ArgumentException($"Property '{_propertyInfo}' not found in System.Diagnostics.Process");
+                throw new ArgumentException($"Property '{Property}' not found in System.Diagnostics.Process");
             }
 
-            _lateBoundPropertyGet = ReflectionHelpers.CreateLateBoundMethod(_propertyInfo.GetGetMethod());
+            _lateBoundPropertyGet = ReflectionHelpers.CreateLateBoundMethod(propertyInfo.GetGetMethod());
 
             _process = Process.GetCurrentProcess();
         }

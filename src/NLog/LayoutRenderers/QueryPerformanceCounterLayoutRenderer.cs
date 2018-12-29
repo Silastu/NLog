@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -39,7 +39,7 @@ namespace NLog.LayoutRenderers
     using System.ComponentModel;
     using System.Globalization;
     using System.Text;
-    using Internal;
+    using NLog.Internal;
 
     /// <summary>
     /// High precision timer, based on the value returned from QueryPerformanceCounter() optionally converted to seconds.

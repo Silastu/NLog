@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -48,13 +48,14 @@ namespace NLog.LayoutRenderers
     /// </summary>
     [LayoutRenderer("exception")]
     [ThreadAgnostic]
+    [ThreadSafe]
     public class ExceptionLayoutRenderer : LayoutRenderer
     {
         private string _format;
         private string _innerFormat = string.Empty;
         private readonly Dictionary<ExceptionRenderingFormat, Action<StringBuilder, Exception>> _renderingfunctions;
 
-        private static readonly Dictionary<String, ExceptionRenderingFormat> _formatsMapping = new Dictionary<string, ExceptionRenderingFormat>(StringComparer.OrdinalIgnoreCase)
+        private static readonly Dictionary<string, ExceptionRenderingFormat> _formatsMapping = new Dictionary<string, ExceptionRenderingFormat>(StringComparer.OrdinalIgnoreCase)
                                                                                                     {
                                                                                                         {"MESSAGE",ExceptionRenderingFormat.Message},
                                                                                                         {"TYPE", ExceptionRenderingFormat.Type},
@@ -252,7 +253,7 @@ namespace NLog.LayoutRenderers
             AppendException(currentException, InnerFormats ?? Formats, builder);
         }
 
-        private void AppendException(Exception currentException, List<ExceptionRenderingFormat> renderFormats, StringBuilder builder)
+        private void AppendException(Exception currentException, IEnumerable<ExceptionRenderingFormat> renderFormats, StringBuilder builder)
         {
             int orgLength = builder.Length;
             foreach (ExceptionRenderingFormat renderingFormat in renderFormats)
@@ -301,7 +302,7 @@ namespace NLog.LayoutRenderers
         /// <param name="ex">The Exception whose method name should be appended.</param>        
         protected virtual void AppendMethod(StringBuilder sb, Exception ex)
         {
-#if SILVERLIGHT || NETSTANDARD1_5
+#if SILVERLIGHT || NETSTANDARD1_0
             sb.Append(ParseMethodNameFromStackTrace(ex.StackTrace));
 #else
             if (ex.TargetSite != null)
@@ -379,7 +380,7 @@ namespace NLog.LayoutRenderers
         /// <param name="ex">The Exception whose properties should be appended.</param>
         protected virtual void AppendSerializeObject(StringBuilder sb, Exception ex)
         {
-            ConfigurationItemFactory.Default.ValueSerializer.SerializeObject(ex, null, null, sb);
+            ConfigurationItemFactory.Default.ValueFormatter.FormatValue(ex, null, MessageTemplates.CaptureType.Serialize, null, sb);
         }
 
         /// <summary>
@@ -407,7 +408,7 @@ namespace NLog.LayoutRenderers
             return formats;
         }
 
-#if SILVERLIGHT || NETSTANDARD1_5
+#if SILVERLIGHT || NETSTANDARD1_0
         /// <summary>
         /// Find name of method on stracktrace.
         /// </summary>

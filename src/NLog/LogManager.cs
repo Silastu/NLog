@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -35,17 +35,14 @@ namespace NLog
 {
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics;
     using System.Globalization;
     using System.Linq;
     using System.Reflection;
     using System.Runtime.CompilerServices;
-    using System.Threading;
 
-    using Common;
-    using Config;
-    using Internal;
-    using Internal.Fakeables;
+    using NLog.Common;
+    using NLog.Config;
+    using NLog.Internal;
 
     /// <summary>
     /// Creates and manages instances of <see cref="T:NLog.Logger" /> objects.
@@ -83,7 +80,7 @@ namespace NLog
             remove => factory.ConfigurationChanged -= value;
         }
 
-#if !SILVERLIGHT && !__IOS__ && !__ANDROID__
+#if !SILVERLIGHT && !__IOS__ && !__ANDROID__ && !NETSTANDARD1_3
         /// <summary>
         /// Occurs when logging <see cref="Configuration" /> gets reloaded.
         /// </summary>
@@ -128,7 +125,6 @@ namespace NLog
             set => factory.KeepVariablesOnReload = value;
         }
 
-
         /// <summary>
         /// Gets or sets the current logging configuration.
         /// <see cref="NLog.LogFactory.Configuration" />
@@ -137,6 +133,17 @@ namespace NLog
         {
             get => factory.Configuration;
             set => factory.Configuration = value;
+        }
+
+        /// <summary>
+        /// Loads logging configuration from file (Currently only XML configuration files supported)
+        /// </summary>
+        /// <param name="configFile">Configuration file to be read</param>
+        /// <returns>LogFactory instance for fluent interface</returns>
+        public static LogFactory LoadConfiguration(string configFile)
+        {
+            factory.LoadConfiguration(configFile);
+            return factory;
         }
 
         /// <summary>
@@ -195,6 +202,8 @@ namespace NLog
                     assembly
                 };
             }
+
+            InternalLogger.Trace("Assembly '{0}' will be hidden in callsite stacktrace", assembly?.FullName);
         }
 
         /// <summary>

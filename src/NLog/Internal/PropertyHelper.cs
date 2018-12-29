@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -88,8 +88,8 @@ namespace NLog.Internal
 
                 if (!(TryNLogSpecificConversion(propertyType, value, out newValue, configurationItemFactory)
                     || TryGetEnumValue(propertyType, value, out newValue, true)
-                    || TryImplicitConversion(propertyType, value, out newValue)
                     || TrySpecialConversion(propertyType, value, out newValue)
+                    || TryImplicitConversion(propertyType, value, out newValue)
                     || TryFlatListConversion(propertyType, value, out newValue)
                     || TryTypeConverterConversion(propertyType, value, out newValue)))
                     newValue = Convert.ChangeType(value, propertyType, CultureInfo.InvariantCulture);
@@ -165,15 +165,10 @@ namespace NLog.Internal
         internal static Type GetArrayItemType(PropertyInfo propInfo)
         {
             var arrayParameterAttribute = propInfo.GetCustomAttribute<ArrayParameterAttribute>();
-            if (arrayParameterAttribute != null)
-            {
-                return arrayParameterAttribute.ItemType;
-            }
-
-            return null;
+            return arrayParameterAttribute?.ItemType;
         }
 
-        internal static IEnumerable<PropertyInfo> GetAllReadableProperties(Type type)
+        internal static PropertyInfo[] GetAllReadableProperties(Type type)
         {
             return type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
         }
@@ -198,7 +193,11 @@ namespace NLog.Internal
         {
             try
             {
-                if (string.Equals(resultType.Namespace, "System", StringComparison.Ordinal))
+#if !NETSTANDARD1_3
+                if (Type.GetTypeCode(resultType) != TypeCode.Object)
+#else
+                if (resultType.IsPrimitive() || resultType == typeof(string))
+#endif
                 {
                     result = null;
                     return false;
@@ -356,8 +355,8 @@ namespace NLog.Internal
                     foreach (var value in values)
                     {
                         if (!(TryGetEnumValue(propertyType, value, out newValue, false)
-                               || TryImplicitConversion(propertyType, value, out newValue)
                                || TrySpecialConversion(propertyType, value, out newValue)
+                               || TryImplicitConversion(propertyType, value, out newValue)
                                || TryTypeConverterConversion(propertyType, value, out newValue)))
                         {
                             newValue = Convert.ChangeType(value, propertyType, CultureInfo.InvariantCulture);
@@ -379,7 +378,7 @@ namespace NLog.Internal
 
         private static bool TryTypeConverterConversion(Type type, string value, out object newValue)
         {
-#if !SILVERLIGHT
+#if !SILVERLIGHT && !NETSTANDARD1_3
             var converter = TypeDescriptor.GetConverter(type);
             if (converter.CanConvertFrom(typeof(string)))
             {

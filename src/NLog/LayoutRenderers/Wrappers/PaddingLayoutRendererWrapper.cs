@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -35,7 +35,7 @@ namespace NLog.LayoutRenderers.Wrappers
 {
     using System;
     using System.ComponentModel;
-    using Config;
+    using NLog.Config;
 
     /// <summary>
     /// Applies padding to another layout output.
@@ -46,6 +46,7 @@ namespace NLog.LayoutRenderers.Wrappers
     [AmbientProperty("FixedLength")]
     [AmbientProperty("AlignmentOnTruncation")]
     [ThreadAgnostic]
+    [ThreadSafe]
     public sealed class PaddingLayoutRendererWrapper : WrapperLayoutRendererBase
     {
         /// <summary>
@@ -88,6 +89,7 @@ namespace NLog.LayoutRenderers.Wrappers
         /// or right-aligned (characters removed from the left). The
         /// default is left alignment.
         /// </summary>
+        /// <docgen category='Transformation Options' order='10' />RegistryLayoutRenderer
         [DefaultValue(PaddingHorizontalAlignment.Left)]
         public PaddingHorizontalAlignment AlignmentOnTruncation { get; set; }
 

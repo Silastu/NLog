@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -139,7 +139,7 @@ namespace NLog
             {
                 if (messageFunc == null)
                 {
-                    throw new ArgumentNullException("messageFunc");
+                    throw new ArgumentNullException(nameof(messageFunc));
                 }
 
                 WriteToTargets(LogLevel.Trace, null, messageFunc());
@@ -210,7 +210,7 @@ namespace NLog
         {
             if (IsTraceEnabled)
             {
-                WriteToTargets(LogLevel.Trace, message, exception);
+                WriteToTargets(LogLevel.Trace, exception, message, null);
             }
         }
 
@@ -233,6 +233,7 @@ namespace NLog
         /// <param name="message">A <see langword="string" /> to be written.</param>
         /// <param name="exception">An exception to be logged.</param>
         /// <param name="args">Arguments to format.</param>
+        [MessageTemplateFormatMethod("message")]
         public void Trace(Exception exception, [Localizable(false)] string message, params object[] args)
         {
             if (IsTraceEnabled)
@@ -425,7 +426,7 @@ namespace NLog
             {
                 if (messageFunc == null)
                 {
-                    throw new ArgumentNullException("messageFunc");
+                    throw new ArgumentNullException(nameof(messageFunc));
                 }
 
                 WriteToTargets(LogLevel.Debug, null, messageFunc());
@@ -496,7 +497,7 @@ namespace NLog
         {
             if (IsDebugEnabled)
             {
-                WriteToTargets(LogLevel.Debug, message, exception);
+                WriteToTargets(LogLevel.Debug, exception, message, null);
             }
         }
 
@@ -519,6 +520,7 @@ namespace NLog
         /// <param name="message">A <see langword="string" /> to be written.</param>
         /// <param name="exception">An exception to be logged.</param>
         /// <param name="args">Arguments to format.</param>
+        [MessageTemplateFormatMethod("message")]
         public void Debug(Exception exception, [Localizable(false)] string message, params object[] args)
         {
             if (IsDebugEnabled)
@@ -711,7 +713,7 @@ namespace NLog
             {
                 if (messageFunc == null)
                 {
-                    throw new ArgumentNullException("messageFunc");
+                    throw new ArgumentNullException(nameof(messageFunc));
                 }
 
                 WriteToTargets(LogLevel.Info, null, messageFunc());
@@ -782,7 +784,7 @@ namespace NLog
         {
             if (IsInfoEnabled)
             {
-                WriteToTargets(LogLevel.Info, message, exception);
+                WriteToTargets(LogLevel.Info, exception, message, null);
             }
         }
 
@@ -805,6 +807,7 @@ namespace NLog
         /// <param name="message">A <see langword="string" /> to be written.</param>
         /// <param name="exception">An exception to be logged.</param>
         /// <param name="args">Arguments to format.</param>
+        [MessageTemplateFormatMethod("message")]
         public void Info(Exception exception, [Localizable(false)] string message, params object[] args)
         {
             if (IsInfoEnabled)
@@ -997,7 +1000,7 @@ namespace NLog
             {
                 if (messageFunc == null)
                 {
-                    throw new ArgumentNullException("messageFunc");
+                    throw new ArgumentNullException(nameof(messageFunc));
                 }
 
                 WriteToTargets(LogLevel.Warn, null, messageFunc());
@@ -1068,7 +1071,7 @@ namespace NLog
         {
             if (IsWarnEnabled)
             {
-                WriteToTargets(LogLevel.Warn, message, exception);
+                WriteToTargets(LogLevel.Warn, exception, message, null);
             }
         }
 
@@ -1091,6 +1094,7 @@ namespace NLog
         /// <param name="message">A <see langword="string" /> to be written.</param>
         /// <param name="exception">An exception to be logged.</param>
         /// <param name="args">Arguments to format.</param>
+        [MessageTemplateFormatMethod("message")]
         public void Warn(Exception exception, [Localizable(false)] string message, params object[] args)
         {
             if (IsWarnEnabled)
@@ -1283,7 +1287,7 @@ namespace NLog
             {
                 if (messageFunc == null)
                 {
-                    throw new ArgumentNullException("messageFunc");
+                    throw new ArgumentNullException(nameof(messageFunc));
                 }
 
                 WriteToTargets(LogLevel.Error, null, messageFunc());
@@ -1354,7 +1358,7 @@ namespace NLog
         {
             if (IsErrorEnabled)
             {
-                WriteToTargets(LogLevel.Error, message, exception);
+                WriteToTargets(LogLevel.Error, exception, message, null);
             }
         }
 
@@ -1377,6 +1381,7 @@ namespace NLog
         /// <param name="message">A <see langword="string" /> to be written.</param>
         /// <param name="exception">An exception to be logged.</param>
         /// <param name="args">Arguments to format.</param>
+        [MessageTemplateFormatMethod("message")]
         public void Error(Exception exception, [Localizable(false)] string message, params object[] args)
         {
             if (IsErrorEnabled)
@@ -1569,7 +1574,7 @@ namespace NLog
             {
                 if (messageFunc == null)
                 {
-                    throw new ArgumentNullException("messageFunc");
+                    throw new ArgumentNullException(nameof(messageFunc));
                 }
 
                 WriteToTargets(LogLevel.Fatal, null, messageFunc());
@@ -1640,7 +1645,7 @@ namespace NLog
         {
             if (IsFatalEnabled)
             {
-                WriteToTargets(LogLevel.Fatal, message, exception);
+                WriteToTargets(LogLevel.Fatal, exception, message, null);
             }
         }
 
@@ -1663,6 +1668,7 @@ namespace NLog
         /// <param name="message">A <see langword="string" /> to be written.</param>
         /// <param name="exception">An exception to be logged.</param>
         /// <param name="args">Arguments to format.</param>
+        [MessageTemplateFormatMethod("message")]
         public void Fatal(Exception exception, [Localizable(false)] string message, params object[] args)
         {
             if (IsFatalEnabled)

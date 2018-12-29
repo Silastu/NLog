@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -313,6 +313,40 @@ namespace NLog.UnitTests.Contexts
             mre.WaitOne();
             Assert.Null(getObject);
             Assert.Empty(getValue);
+        }
+
+        [Fact]
+        public void disposable_removes_item()
+        {
+            const string itemNotRemovedKey = "itemNotRemovedKey";
+            const string itemRemovedKey = "itemRemovedKey";
+
+            MappedDiagnosticsLogicalContext.Clear();
+            MappedDiagnosticsLogicalContext.Set(itemNotRemovedKey, "itemNotRemoved");
+            using (MappedDiagnosticsLogicalContext.SetScoped(itemRemovedKey, "itemRemoved"))
+            {
+                Assert.Equal(MappedDiagnosticsLogicalContext.GetNames(), new[] { itemNotRemovedKey, itemRemovedKey });
+            }
+
+            Assert.Equal(MappedDiagnosticsLogicalContext.GetNames(), new[] { itemNotRemovedKey });
+        }
+
+        [Fact]
+        public void dispose_is_idempotent()
+        {
+            const string itemKey = "itemKey";
+
+            MappedDiagnosticsLogicalContext.Clear();
+            IDisposable disposable = MappedDiagnosticsLogicalContext.SetScoped(itemKey, "item1");
+
+            disposable.Dispose();
+            Assert.False(MappedDiagnosticsLogicalContext.Contains(itemKey));
+
+            //This item shouldn't be removed since it is not the disposable one
+            MappedDiagnosticsLogicalContext.Set(itemKey, "item2");
+            disposable.Dispose();
+
+            Assert.True(MappedDiagnosticsLogicalContext.Contains(itemKey));
         }
     }
 }

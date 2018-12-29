@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -34,12 +34,15 @@
 namespace NLog.LayoutRenderers
 {
     using System.Text;
-    using System.Threading;
+    using NLog.Common;
+    using NLog.Config;
+    using NLog.Internal;
 
     /// <summary>
     /// The identifier of the current thread.
     /// </summary>
     [LayoutRenderer("threadid")]
+    [ThreadSafe]
     public class ThreadIdLayoutRenderer : LayoutRenderer
     {
         /// <summary>
@@ -50,7 +53,7 @@ namespace NLog.LayoutRenderers
         protected override void Append(StringBuilder builder, LogEventInfo logEvent)
         {
             //no culture needed for ints
-            Internal.StringBuilderExt.AppendInvariant(builder, Thread.CurrentThread.ManagedThreadId);
+            builder.AppendInvariant(AsyncHelpers.GetManagedThreadId());
         }
     }
 }

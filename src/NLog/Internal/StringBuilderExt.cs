@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -34,7 +34,7 @@
 using System;
 using System.IO;
 using System.Text;
-using NLog.Config;
+using NLog.MessageTemplates;
 
 namespace NLog.Internal
 {
@@ -59,11 +59,11 @@ namespace NLog.Internal
             }
             else if (format == "@")
             {
-                MessageTemplates.ValueSerializer.Instance.SerializeObject(value, null, formatProvider, builder);
+                ValueFormatter.Instance.FormatValue(value, null, CaptureType.Serialize, formatProvider, builder);
             }
             else if (value != null)
             {
-                MessageTemplates.ValueSerializer.Instance.FormatObject(value, format, formatProvider, builder);
+                ValueFormatter.Instance.FormatValue(value, format, CaptureType.Normal, formatProvider, builder);
             }
         }
 
@@ -78,7 +78,7 @@ namespace NLog.Internal
             if (value < 0)
             {
                 builder.Append('-');
-                uint uint_value = UInt32.MaxValue - ((uint)value) + 1; //< This is to deal with Int32.MinValue
+                uint uint_value = uint.MaxValue - ((uint)value) + 1; //< This is to deal with Int32.MinValue
                 AppendInvariant(builder, uint_value);
             }
             else
@@ -158,18 +158,18 @@ namespace NLog.Internal
             if (transformBuffer != null)
             {
                 int charCount = 0;
-                int byteCount = 0;
+                int byteCount = encoding.GetMaxByteCount(builder.Length);
+                ms.SetLength(ms.Position + byteCount);
                 for (int i = 0; i < builder.Length; i += transformBuffer.Length)
                 {
                     charCount = Math.Min(builder.Length - i, transformBuffer.Length);
                     builder.CopyTo(i, transformBuffer, 0, charCount);
-                    byteCount = encoding.GetMaxByteCount(charCount);
-                    ms.SetLength(ms.Position + byteCount);
                     byteCount = encoding.GetBytes(transformBuffer, 0, charCount, ms.GetBuffer(), (int)ms.Position);
-                    if ((ms.Position += byteCount) != ms.Length)
-                    {
-                        ms.SetLength(ms.Position);
-                    }
+                    ms.Position += byteCount;
+                }
+                if (ms.Position != ms.Length)
+                {
+                    ms.SetLength(ms.Position);
                 }
             }
             else
@@ -180,6 +180,102 @@ namespace NLog.Internal
                 byte[] bytes = encoding.GetBytes(str);
                 ms.Write(bytes, 0, bytes.Length);
             }
+        }
+
+        /// <summary>
+        /// Copies the contents of the StringBuilder to the destination StringBuilder
+        /// </summary>
+        /// <param name="builder">StringBuilder source</param>
+        /// <param name="destination">StringBuilder destination</param>
+        public static void CopyTo(this StringBuilder builder, StringBuilder destination)
+        {
+            int sourceLength = builder.Length;
+            if (sourceLength > 0)
+            {
+                destination.EnsureCapacity(sourceLength + destination.Length);
+                if (sourceLength < 8)
+                {
+                    // Skip char-buffer allocation for small strings
+                    for (int i = 0; i < sourceLength; ++i)
+                        destination.Append(builder[i]);
+                }
+                else if (sourceLength < 512)
+                {
+                    // Single char-buffer allocation through string-object
+                    destination.Append(builder.ToString());
+                }
+                else
+                {
+#if !SILVERLIGHT
+                    // Reuse single char-buffer allocation for large StringBuilders
+                    char[] buffer = new char[256];
+                    for (int i = 0; i < sourceLength; i += buffer.Length)
+                    {
+                        int charCount = Math.Min(sourceLength - i, buffer.Length);
+                        builder.CopyTo(i, buffer, 0, charCount);
+                        destination.Append(buffer, 0, charCount);
+                    }
+#else
+                    destination.Append(builder.ToString());
+#endif
+                }
+            }
+        }
+
+        /// <summary>
+        /// Scans the StringBuilder for the position of needle character
+        /// </summary>
+        /// <param name="builder">StringBuilder source</param>
+        /// <param name="needle">needle character to search for</param>
+        /// <param name="startPos"></param>
+        /// <returns>Index of the first occurrence (Else -1)</returns>
+        public static int IndexOf(this StringBuilder builder, char needle, int startPos = 0)
+        {
+            for (int i = startPos; i < builder.Length; ++i)
+                if (builder[i] == needle)
+                    return i;
+            return -1;
+        }
+
+        /// <summary>
+        /// Compares the contents of two StringBuilders
+        /// </summary>
+        /// <remarks>
+        /// Correct implementation of <see cref="StringBuilder.Equals(StringBuilder)" /> that also works when <see cref="StringBuilder.Capacity"/> is not the same
+        /// </remarks>
+        /// <returns>True when content is the same</returns>
+        public static bool EqualTo(this StringBuilder builder, StringBuilder other)
+        {
+            if (builder.Length != other.Length)
+                return false;
+
+            for (int x = 0; x < builder.Length; ++x)
+            {
+                if (builder[x] != other[x])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Compares the contents of a StringBuilder and a String
+        /// </summary>
+        /// <returns>True when content is the same</returns>
+        public static bool EqualTo(this StringBuilder builder, string other)
+        {
+            if (builder.Length != other.Length)
+                return false;
+
+            for (int i = 0; i < other.Length; ++i)
+            {
+                if (builder[i] != other[i])
+                    return false;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -204,6 +300,43 @@ namespace NLog.Internal
             builder.Append((char)(((number / 100) % 10) + '0'));
             builder.Append((char)(((number / 10) % 10) + '0'));
             builder.Append((char)(((number / 1) % 10) + '0'));
+        }
+
+        /// <summary>
+        /// Apend a int type (byte, int) as string
+        /// </summary>
+        internal static void AppendIntegerAsString(this StringBuilder sb, object value, TypeCode objTypeCode)
+        {
+            switch (objTypeCode)
+            {
+                case TypeCode.Byte: sb.AppendInvariant((byte)value); break;
+                case TypeCode.SByte: sb.AppendInvariant((sbyte)value); break;
+                case TypeCode.Int16: sb.AppendInvariant((short)value); break;
+                case TypeCode.Int32: sb.AppendInvariant((int)value); break;
+                case TypeCode.Int64:
+                {
+                    long int64 = (long)value;
+                    if (int64 < int.MaxValue && int64 > int.MinValue)
+                        sb.AppendInvariant((int)int64);
+                    else
+                        sb.Append(int64);
+                }
+                    break;
+                case TypeCode.UInt16: sb.AppendInvariant((ushort)value); break;
+                case TypeCode.UInt32: sb.AppendInvariant((uint)value); break;
+                case TypeCode.UInt64:
+                {
+                    ulong uint64 = (ulong)value;
+                    if (uint64 < uint.MaxValue)
+                        sb.AppendInvariant((uint)uint64);
+                    else
+                        sb.Append(uint64);
+                }
+                    break;
+                default:
+                    sb.Append(XmlHelper.XmlConvertToString(value, objTypeCode));
+                    break;
+            }
         }
     }
 }

@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -37,9 +37,10 @@ namespace NLog.Config
     using System.Collections.Generic;
     using System.Collections.ObjectModel;
     using System.Globalization;
+    using System.Linq;
     using System.Text;
-    using Filters;
-    using Targets;
+    using NLog.Filters;
+    using NLog.Targets;
 
     /// <summary>
     /// Represents a logging rule. An equivalent of &lt;logger /&gt; configuration element.
@@ -119,17 +120,21 @@ namespace NLog.Config
         /// <summary>
         /// Gets a collection of targets that should be written to when this rule matches.
         /// </summary>
-        public IList<Target> Targets { get; private set; }
+        public IList<Target> Targets { get; }
 
         /// <summary>
         /// Gets a collection of child rules to be evaluated when this rule matches.
         /// </summary>
-        public IList<LoggingRule> ChildRules { get; private set; }
+        public IList<LoggingRule> ChildRules { get; }
+
+        internal List<LoggingRule> GetChildRulesThreadSafe() { lock (ChildRules) return ChildRules.ToList(); }
+        internal List<Target> GetTargetsThreadSafe() { lock (Targets) return Targets.ToList(); }
+        internal bool RemoveTargetThreadSafe(Target target) { lock (Targets) return Targets.Remove(target); }
 
         /// <summary>
         /// Gets a collection of filters to be checked before writing to targets.
         /// </summary>
-        public IList<Filter> Filters { get; private set; }
+        public IList<Filter> Filters { get; }
 
         /// <summary>
         /// Gets or sets a value indicating whether to quit processing any further rule when this one matches.
@@ -258,6 +263,30 @@ namespace NLog.Config
         }
 
         /// <summary>
+        /// Disables logging for particular levels between (included) <paramref name="minLevel"/> and <paramref name="maxLevel"/>.
+        /// </summary>
+        /// <param name="minLevel">Minimum log level to be disables.</param>
+        /// <param name="maxLevel">Maximum log level to de disabled.</param>
+        public void DisableLoggingForLevels(LogLevel minLevel, LogLevel maxLevel)
+        {
+            for (int i = minLevel.Ordinal; i <= maxLevel.Ordinal; i++)
+            {
+                DisableLoggingForLevel(LogLevel.FromOrdinal(i));
+            }
+        }
+
+        /// <summary>
+        /// Enables logging the levels between (included) <paramref name="minLevel"/> and <paramref name="maxLevel"/>. All the other levels will be disabled.
+        /// </summary>
+        /// <param name="minLevel">>Minimum log level needed to trigger this rule.</param>
+        /// <param name="maxLevel">Maximum log level needed to trigger this rule.</param>
+        public void SetLoggingLevels(LogLevel minLevel, LogLevel maxLevel)
+        {
+            DisableLoggingForLevels(LogLevel.MinLevel, LogLevel.MaxLevel);
+            EnableLoggingForLevels(minLevel, maxLevel);
+        }
+
+        /// <summary>
         /// Returns a string representation of <see cref="LoggingRule"/>. Used for debugging.
         /// </summary>
         /// <returns>
@@ -278,7 +307,7 @@ namespace NLog.Config
             }
 
             sb.Append("] appendTo: [ ");
-            foreach (Target app in Targets)
+            foreach (Target app in GetTargetsThreadSafe())
             {
                 sb.AppendFormat(CultureInfo.InvariantCulture, "{0} ", app.Name);
             }

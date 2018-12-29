@@ -1,5 +1,5 @@
 // 
-// Copyright (c) 2004-2017 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2018 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -31,14 +31,16 @@
 // THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-using System.IO;
-using NLog.Common;
+#if !NETSTANDARD1_3
 
 namespace NLog.Targets
 {
     using System;
+    using System.IO;
     using System.Text;
     using System.ComponentModel;
+
+    using NLog.Common;
 
     /// <summary>
     /// Writes log messages to the console.
@@ -91,6 +93,7 @@ namespace NLog.Targets
         /// The encoding for writing messages to the <see cref="Console"/>.
         ///  </summary>
         /// <remarks>Has side effect</remarks>
+        /// <docgen category='Console Options' order='10' />
         public Encoding Encoding
         {
             get => ConsoleTargetHelper.GetConsoleOutputEncoding(_encoding, IsInitialized, _pauseLogging);
@@ -108,6 +111,7 @@ namespace NLog.Targets
         ///  - Disables console writing if Environment.UserInteractive = False (Windows Service)
         ///  - Disables console writing if Console Standard Input is not available (Non-Console-App)
         /// </summary>
+        /// <docgen category='Console Options' order='10' />
         [DefaultValue(false)]
         public bool DetectConsoleAvailable { get; set; }
 
@@ -234,3 +238,5 @@ namespace NLog.Targets
         }
     }
 }
+
+#endif
